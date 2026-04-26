@@ -17,23 +17,25 @@ function formatCommunityBoard(cb) {
   return `${boroMap[match[2].toUpperCase().trim()] || 'XX'}-${match[1]}`;
 }
 
+// ... 前面部分保持不变 ...
 console.log('Parsing CSV...');
 Papa.parse(csvData, {
   header: true,
   skipEmptyLines: true,
-    complete: (results) => {
-    const mappedData = results.data.map(row => ({
-      id: row['Unique Key'],
-      createdDate: row['Created Date'] ? row['Created Date'].slice(0, 10) : '', 
-      complaintType: row['Problem (formerly Complaint Type)'],
-      communityBoard: formatCommunityBoard(row['Community Board']),
-      latitude: row['Latitude'] ? parseFloat(row['Latitude']) : null,
-      longitude: row['Longitude'] ? parseFloat(row['Longitude']) : null,
-    }))
-    .filter(d => d.latitude && d.longitude)
-    .slice(0, 3000); // 🚨 加上这一句！只保留 5000 条，把 JSON 从 111MB 压到 1MB 以内！
+  complete: (results) => {
+    const mappedData = results.data
+      .map(row => ({
+        id: row['Unique Key'],
+        createdDate: row['Created Date'] ? row['Created Date'].slice(0, 10) : '', 
+        complaintType: row['Problem (formerly Complaint Type)'],
+        communityBoard: formatCommunityBoard(row['Community Board']),
+        latitude: row['Latitude'] ? parseFloat(row['Latitude']) : null,
+        longitude: row['Longitude'] ? parseFloat(row['Longitude']) : null,
+      }))
+      .filter(d => d.latitude && d.longitude && d.complaintType) // 过滤掉无效数据
+      .slice(0, 3000); // 🚨 这里的 3000 条足以支撑展示，且文件体积极小
 
     fs.writeFileSync(jsonOutputPath, JSON.stringify(mappedData));
-    console.log(`✅ Success! Compressed data written to ${jsonOutputPath}`);
+    console.log(`✅ 预处理完成！文件已压缩至: ${jsonOutputPath}`);
   }
 });
