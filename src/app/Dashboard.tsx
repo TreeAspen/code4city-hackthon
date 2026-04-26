@@ -10,127 +10,128 @@ import { mockData311 } from './mockData';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
+// Sanitation_set sub-buckets from src/asset/311_2025_sanitation_filtering.ipynb.
+// Each subcategory.name is the actual NYC 311 "Problem (formerly Complaint Type)"
+// value, so the existing complaintType matcher in filteredData picks it up.
+const BUCKET_A_TRASH = [
+  { id: 'a-dirty', name: 'Dirty Condition' },
+  { id: 'a-missed', name: 'Missed Collection' },
+  { id: 'a-illegal', name: 'Illegal Dumping' },
+  { id: 'a-litter-c', name: 'Litter Basket Complaint' },
+  { id: 'a-litter-r', name: 'Litter Basket Request' },
+  { id: 'a-recycling', name: 'Recycling Basket Complaint' },
+  { id: 'a-resi', name: 'Residential Disposal Complaint' },
+  { id: 'a-comm', name: 'Commercial Disposal Complaint' },
+  { id: 'a-inst', name: 'Institution Disposal Complaint' },
+  { id: 'a-dump', name: 'Dumpster Complaint' },
+  { id: 'a-sweep', name: 'Street Sweeping Complaint' },
+  { id: 'a-worker', name: 'Sanitation Worker or Vehicle Complaint' },
+  { id: 'a-transfer', name: 'Transfer Station Complaint' },
+  { id: 'a-dsny', name: 'DSNY Internal' },
+];
+const BUCKET_B_SEWER = [
+  { id: 'b-sewer', name: 'Sewer' },
+  { id: 'b-root', name: 'Root/Sewer/Sidewalk Condition' },
+  { id: 'b-indoor', name: 'Indoor Sewage' },
+  { id: 'b-industrial', name: 'Industrial Waste' },
+  { id: 'b-leak', name: 'WATER LEAK' },
+  { id: 'b-water', name: 'Water System' },
+];
+const BUCKET_C_FLOOD = [
+  { id: 'c-standing', name: 'Standing Water' },
+  { id: 'c-conserve', name: 'Water Conservation' },
+  { id: 'c-quality', name: 'Water Quality' },
+  { id: 'c-curb', name: 'Curb Condition' },
+  { id: 'c-street', name: 'Street Condition' },
+  { id: 'c-highway', name: 'Highway Condition' },
+  { id: 'c-dep-st', name: 'DEP Street Condition' },
+  { id: 'c-dep-sw', name: 'DEP Sidewalk Condition' },
+  { id: 'c-dep-hw', name: 'DEP Highway Condition' },
+  { id: 'c-sw', name: 'Sidewalk Condition' },
+];
+const BUCKET_D_HYGIENE = [
+  { id: 'd-rodent', name: 'Rodent' },
+  { id: 'd-mosquito', name: 'Mosquitoes' },
+  { id: 'd-dead', name: 'Dead Animal' },
+  { id: 'd-unsan', name: 'UNSANITARY CONDITION' },
+  { id: 'd-toilet', name: 'Public Toilet' },
+  { id: 'd-urin', name: 'Urinating in Public' },
+  { id: 'd-pigeon', name: 'Unsanitary Pigeon Condition' },
+  { id: 'd-animal-pvt', name: 'Unsanitary Animal Pvt Property' },
+  { id: 'd-animal-fac', name: 'Unsanitary Animal Facility' },
+];
+const BUCKET_E_BLOCKAGE = [
+  { id: 'e-tree', name: 'Overgrown Tree/Branches' },
+  { id: 'e-wood', name: 'Wood Pile Remaining' },
+  { id: 'e-lot', name: 'Lot Condition' },
+  { id: 'e-obstr', name: 'Obstruction' },
+  { id: 'e-aban', name: 'Abandoned Vehicle' },
+  { id: 'e-derelict', name: 'Derelict Vehicles' },
+];
+
+const BUCKETS = {
+  a: { id: 'bucket-a', title: 'A · Trash, Collection & Sweeping', color: 'bg-white border-gray-200', subCategories: BUCKET_A_TRASH },
+  b: { id: 'bucket-b', title: 'B · Sewer & Wastewater', color: 'bg-white border-gray-200', subCategories: BUCKET_B_SEWER },
+  c: { id: 'bucket-c', title: 'C · Flooding, Drainage & Streets', color: 'bg-white border-gray-200', subCategories: BUCKET_C_FLOOD },
+  d: { id: 'bucket-d', title: 'D · Hygiene & Pests', color: 'bg-white border-gray-200', subCategories: BUCKET_D_HYGIENE },
+  e: { id: 'bucket-e', title: 'E · Blockage & Environment', color: 'bg-white border-gray-200', subCategories: BUCKET_E_BLOCKAGE },
+};
+
+function buildCategoriesForQuery(query: string): MainCategory[] {
+  const q = query.toLowerCase();
+
+  const wants = {
+    a: /\b(trash|garbage|litter|basket|sweep|sweeping|dump|dumping|missed|collection|recycl|disposal|dsny|sanitation worker|transfer station)\b/.test(q),
+    b: /\b(sewer|sewage|wastewater|water leak|water system|industrial waste|root)\b/.test(q),
+    c: /\b(flood|flooding|drain|drainage|standing water|street condition|sidewalk|highway|curb|water quality|water conservation|pothole)\b/.test(q),
+    d: /\b(hygiene|pest|rodent|rat|mosquito|dead animal|unsanitary|public toilet|urinat|pigeon|animal)\b/.test(q),
+    e: /\b(block|blockage|obstruct|abandoned|derelict|tree|branch|wood|lot)\b/.test(q),
+  };
+
+  const anyMatch = Object.values(wants).some(Boolean);
+  // Default: pull anything sanitation-relevant
+  const useAll = !anyMatch;
+
+  const main: MainCategory[] = [];
+  if (useAll || wants.a) main.push(BUCKETS.a);
+  if (useAll || wants.b) main.push(BUCKETS.b);
+  if (useAll || wants.c) main.push(BUCKETS.c);
+  if (useAll || wants.d) main.push(BUCKETS.d);
+  if (useAll || wants.e) main.push(BUCKETS.e);
+
+  // Always include an Excluded bucket so the user can drag irrelevant items out.
+  const allChosen = new Set(main.flatMap(c => c.subCategories.map(s => s.id)));
+  const excluded: MainCategory = {
+    id: 'excluded',
+    title: 'Excluded (Irrelevant)',
+    color: 'bg-gray-100 border-gray-200',
+    subCategories: [
+      ...BUCKET_A_TRASH, ...BUCKET_B_SEWER, ...BUCKET_C_FLOOD,
+      ...BUCKET_D_HYGIENE, ...BUCKET_E_BLOCKAGE,
+    ].filter(s => !allChosen.has(s.id)),
+  };
+  main.push(excluded);
+  return main;
+}
+
 export default function Dashboard() {
   const [filters, setFilters] = useState<FilterState>({
-    startDate: '2023-01-01',
-    endDate: '2023-12-31',
+    startDate: '2025-01-01',
+    endDate: '2025-12-31',
     boroughs: [],
     communityBoards: [],
   });
 
-  const [categories, setCategories] = useState<MainCategory[]>([
-    {
-      id: 'organic',
-      title: 'Organic Matter (Cause A)',
-      color: 'bg-white border-gray-200',
-      subCategories: [
-        { id: 'sub-1', name: 'Leaves & Twigs' },
-        { id: 'sub-2', name: 'Soil / Dirt' },
-        { id: 'sub-3', name: 'Grass Clippings' },
-      ],
-    },
-    {
-      id: 'street',
-      title: 'Street Debris (Cause B)',
-      color: 'bg-white border-gray-200',
-      subCategories: [
-        { id: 'sub-4', name: 'Plastic Bags' },
-        { id: 'sub-5', name: 'Coffee Cups / Bottles' },
-        { id: 'sub-6', name: 'Newspapers' },
-      ],
-    },
-    {
-      id: 'construction',
-      title: 'Construction (Cause C)',
-      color: 'bg-white border-gray-200',
-      subCategories: [
-        { id: 'sub-7', name: 'Gravel / Sand' },
-        { id: 'sub-8', name: 'Cement Mix' },
-      ],
-    },
-    {
-      id: 'excluded',
-      title: 'Excluded (Irrelevant)',
-      color: 'bg-gray-100 border-gray-200',
-      subCategories: [
-        { id: 'sub-9', name: 'Rat Sighting' },
-        { id: 'sub-10', name: 'Noise - Street' },
-      ],
-    },
-  ]);
+  const [categories, setCategories] = useState<MainCategory[]>(() => buildCategoriesForQuery('Please help me find all trash data that causes drain blockages'));
   const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [activeQuery, setActiveQuery] = useState('Please help me find all trash data that causes drain blockages');
 
-  // Handle AI Query
+  // Handle AI Query — maps query keywords to the sanitation_set sub-buckets.
   const handleAIQuery = (query: string) => {
     setIsProcessingAI(true);
     setActiveQuery(query);
-    // Simulate AI extraction based on query
     setTimeout(() => {
-      const q = query.toLowerCase();
-      if (q.includes('drain') || q.includes('block') || q.includes('trash') || q.includes('dumping')) {
-        setCategories([
-          {
-            id: 'organic',
-            title: 'Organic Matter (Cause A)',
-            color: 'bg-white border-gray-200',
-            subCategories: [
-              { id: 'sub-1', name: 'Leaves & Twigs' },
-              { id: 'sub-2', name: 'Soil / Dirt' },
-              { id: 'sub-3', name: 'Grass Clippings' },
-            ],
-          },
-          {
-            id: 'street',
-            title: 'Street Debris (Cause B)',
-            color: 'bg-white border-gray-200',
-            subCategories: [
-              { id: 'sub-4', name: 'Plastic Bags' },
-              { id: 'sub-5', name: 'Coffee Cups / Bottles' },
-              { id: 'sub-6', name: 'Newspapers' },
-            ],
-          },
-          {
-            id: 'construction',
-            title: 'Construction (Cause C)',
-            color: 'bg-white border-gray-200',
-            subCategories: [
-              { id: 'sub-7', name: 'Gravel / Sand' },
-              { id: 'sub-8', name: 'Cement Mix' },
-            ],
-          },
-          {
-            id: 'excluded',
-            title: 'Excluded (Irrelevant)',
-            color: 'bg-gray-100 border-gray-200',
-            subCategories: [
-              { id: 'sub-9', name: 'Rat Sighting' },
-              { id: 'sub-10', name: 'Noise - Street' },
-            ],
-          },
-        ]);
-      } else {
-        setCategories([
-          {
-            id: 'general',
-            title: 'General Trash',
-            color: 'bg-white border-black',
-            subCategories: [
-              { id: 'sub-1', name: 'Household Waste' },
-              { id: 'sub-2', name: 'Bulky Items' },
-            ],
-          },
-          {
-            id: 'excluded',
-            title: 'Excluded',
-            color: 'bg-gray-200 border-black',
-            subCategories: [
-              { id: 'sub-3', name: 'Noise' },
-              { id: 'sub-4', name: 'Graffiti' },
-            ],
-          },
-        ]);
-      }
+      setCategories(buildCategoriesForQuery(query));
       setIsProcessingAI(false);
     }, 1500);
   };

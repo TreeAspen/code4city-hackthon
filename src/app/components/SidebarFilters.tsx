@@ -15,20 +15,23 @@ type Project = { id: string; name: string; isExpanded: boolean; items: HistoryIt
 const INITIAL_PROJECTS: Project[] = [
   {
     id: 'p1',
-    name: 'Trash & Sanitation',
+    name: 'NYC 311 Sanitation 2025',
     isExpanded: true,
     items: [
-      { id: 'h1', name: 'Drain Blockages', query: 'Please help me find all trash data that causes drain blockages' },
-      { id: 'h2', name: 'Illegal Dumping', query: 'Analysis of illegal dumping in Brooklyn' }
+      { id: 'h1', name: 'A · Trash, Collection & Sweeping', query: 'Show all trash, missed collection, illegal dumping, baskets and street sweeping complaints' },
+      { id: 'h2', name: 'B · Sewer & Wastewater', query: 'Show sewer backups, indoor sewage, industrial waste, water leaks and water system complaints' },
+      { id: 'h3', name: 'C · Flooding, Drainage & Streets', query: 'Show standing water, street and sidewalk condition complaints related to drainage and flooding' },
+      { id: 'h4', name: 'D · Hygiene & Pests', query: 'Show rodent, mosquito, dead animal, unsanitary conditions and public toilet complaints' },
+      { id: 'h5', name: 'E · Blockage & Environment', query: 'Show overgrown trees, wood piles, lot conditions, obstructions and abandoned/derelict vehicles' },
     ]
   },
   {
     id: 'p2',
-    name: 'Noise & Nuisance',
+    name: 'Cross-cutting Issues',
     isExpanded: true,
     items: [
-      { id: 'h3', name: 'Nighttime Construction', query: 'Nighttime construction noise complaints' },
-      { id: 'h4', name: 'Heating Outages', query: 'Heating and hot water outage records' }
+      { id: 'h6', name: 'Drain Blockages', query: 'Please help me find all trash data that causes drain blockages' },
+      { id: 'h7', name: 'Illegal Dumping', query: 'Analysis of illegal dumping in Brooklyn' },
     ]
   }
 ];
