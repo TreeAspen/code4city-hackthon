@@ -78,7 +78,7 @@ export const DashboardLayout = ({ sidebar, content, rightSidebar }: LayoutProps)
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-6 flex flex-col min-w-0 bg-gray-50">
+        <div className="flex-1 overflow-hidden flex flex-col min-w-0 bg-gray-50">
           {content}
         </div>
       </main>

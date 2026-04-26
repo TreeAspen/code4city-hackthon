@@ -241,35 +241,41 @@ export default function Dashboard() {
         sidebar={<SidebarFilters filters={filters} setFilters={setFilters} onSelectHistory={handleAIQuery} activeQuery={activeQuery} />}
         rightSidebar={<AnalyticsSidebar data={filteredData} />}
         content={
-          <div className="flex flex-col h-full space-y-4">
-            <AIQueryBuilder 
-              onSearch={handleAIQuery} 
-              isProcessing={isProcessingAI}
-              value={activeQuery}
-              onChange={setActiveQuery}
-            />
-            
-            {activeQuery && (
-              <div className="flex-1 min-h-[400px] overflow-hidden bg-white flex flex-col border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-                <div className="px-4 py-3 border-b-2 border-black bg-white flex justify-between items-center">
-                  <h3 className="font-bold text-black uppercase tracking-tight text-sm">Semantic Classification for: "{activeQuery}"</h3>
-                  <p className="text-xs font-bold text-black uppercase tracking-tight">Drag to reassign, or use 'Add Item' to move existing subcategories.</p>
-                </div>
-                <CategoryBoard 
-                  categories={categories} 
-                  allSubCategories={categories.flatMap(c => c.subCategories)}
-                  onMoveSub={handleMoveSubCategory}
-                  onRemoveSub={handleRemoveSubCategory}
-                  onAddSub={handleAddSubCategory}
-                  onUpdateCategory={handleUpdateCategory}
-                  onRemoveCategory={handleRemoveCategory}
-                  onAddMainCategory={handleAddMainCategory}
-                />
-              </div>
-            )}
+          <div className="flex flex-col h-full">
+            {/* Sticky prompt input — always visible at top of middle column */}
+            <div className="shrink-0 border-b border-black/10 shadow-sm z-10">
+              <AIQueryBuilder
+                onSearch={handleAIQuery}
+                isProcessing={isProcessingAI}
+                value={activeQuery}
+                onChange={setActiveQuery}
+              />
+            </div>
 
-            <div className="h-1/3 min-h-[300px] overflow-hidden flex flex-col">
-              <DataPreview data={filteredData} />
+            {/* Scrollable workspace below */}
+            <div className="flex-1 overflow-auto p-6 flex flex-col space-y-4 min-h-0">
+              {activeQuery && (
+                <div className="flex-1 min-h-[400px] overflow-hidden bg-white flex flex-col border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+                  <div className="px-4 py-3 border-b-2 border-black bg-white flex justify-between items-center">
+                    <h3 className="font-bold text-black uppercase tracking-tight text-sm">Semantic Classification for: "{activeQuery}"</h3>
+                    <p className="text-xs font-bold text-black uppercase tracking-tight">Drag to reassign, or use 'Add Item' to move existing subcategories.</p>
+                  </div>
+                  <CategoryBoard
+                    categories={categories}
+                    allSubCategories={categories.flatMap(c => c.subCategories)}
+                    onMoveSub={handleMoveSubCategory}
+                    onRemoveSub={handleRemoveSubCategory}
+                    onAddSub={handleAddSubCategory}
+                    onUpdateCategory={handleUpdateCategory}
+                    onRemoveCategory={handleRemoveCategory}
+                    onAddMainCategory={handleAddMainCategory}
+                  />
+                </div>
+              )}
+
+              <div className="h-1/3 min-h-[300px] overflow-hidden flex flex-col">
+                <DataPreview data={filteredData} />
+              </div>
             </div>
           </div>
         }
