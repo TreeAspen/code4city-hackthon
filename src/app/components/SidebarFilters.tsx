@@ -28,13 +28,66 @@ const INITIAL_PROJECTS: Project[] = [
   },
   {
     id: 'p2',
-    name: 'Cross-cutting Issues',
-    isExpanded: true,
+    name: 'Noise & Vibration',
+    isExpanded: false,
     items: [
-      { id: 'h6', name: 'Drain Blockages', query: 'Please help me find all trash data that causes drain blockages' },
-      { id: 'h7', name: 'Illegal Dumping', query: 'Analysis of illegal dumping in Brooklyn' },
+      { id: 'h6', name: 'Late-night Construction', query: 'Construction noise complaints between 10pm and 6am' },
+      { id: 'h7', name: 'Loud Music — Residential', query: 'Residential loud music and party complaints by borough' },
+      { id: 'h8', name: 'Helicopter Noise Hotspots', query: 'Helicopter noise complaints concentrated near East River' },
+      { id: 'h9', name: 'Bar / Club Noise', query: 'Commercial noise from bars and clubs after midnight' },
     ]
-  }
+  },
+  {
+    id: 'p3',
+    name: 'Heat & Hot Water',
+    isExpanded: false,
+    items: [
+      { id: 'h10', name: 'Winter Heat Outages', query: 'Heat or hot water outages during heat season Oct–May' },
+      { id: 'h11', name: 'Repeat-offender Buildings', query: 'Buildings with 5+ HEAT/HOT WATER complaints in a year' },
+      { id: 'h12', name: 'NYCHA vs Private', query: 'Compare heat outage rates between NYCHA and private housing' },
+    ]
+  },
+  {
+    id: 'p4',
+    name: 'Street Safety',
+    isExpanded: false,
+    items: [
+      { id: 'h13', name: 'Pothole Hot Zones', query: 'Pothole complaints clustered on arterial roads' },
+      { id: 'h14', name: 'Blocked Bike Lanes', query: 'Illegal parking blocking protected bike lanes' },
+      { id: 'h15', name: 'Damaged Street Signs', query: 'Missing, damaged or dangling street signs' },
+      { id: 'h16', name: 'Traffic Signal Outages', query: 'Traffic signal condition complaints' },
+    ]
+  },
+  {
+    id: 'p5',
+    name: 'Public Health',
+    isExpanded: false,
+    items: [
+      { id: 'h17', name: 'Rat Mitigation Zones', query: 'Rodent complaints in DOHMH rat mitigation zones' },
+      { id: 'h18', name: 'Lead Paint Risk', query: 'Lead paint complaints in pre-1960 buildings' },
+      { id: 'h19', name: 'Indoor Air Quality', query: 'Indoor air quality and mold complaints' },
+    ]
+  },
+  {
+    id: 'p6',
+    name: 'Housing Quality',
+    isExpanded: false,
+    items: [
+      { id: 'h20', name: 'No-Heat Tickets', query: 'HPD violations issued for no heat in winter' },
+      { id: 'h21', name: 'Plumbing Outages', query: 'Plumbing complaints concentrated in pre-war buildings' },
+      { id: 'h22', name: 'Elevator Out-of-Service', query: 'Elevator complaints in 6+ floor buildings' },
+    ]
+  },
+  {
+    id: 'p7',
+    name: 'Cross-cutting Issues',
+    isExpanded: false,
+    items: [
+      { id: 'h23', name: 'Drain Blockages', query: 'Please help me find all trash data that causes drain blockages' },
+      { id: 'h24', name: 'Illegal Dumping — Brooklyn', query: 'Analysis of illegal dumping in Brooklyn' },
+      { id: 'h25', name: 'Tree-Sewer Conflicts', query: 'Tree root and sewer condition co-located complaints' },
+    ]
+  },
 ];
 
 export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQuery }: SidebarFiltersProps) => {
