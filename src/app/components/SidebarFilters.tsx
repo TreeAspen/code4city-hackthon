@@ -18,12 +18,13 @@ const INITIAL_PROJECTS: Project[] = [
     id: 'p1',
     name: 'NYC 311 Sanitation 2025',
     isExpanded: true,
+    // 这里将原来的 5 个子项合并为 1 个总览项
     items: [
-      { id: 'h1', name: 'A · Trash, Collection & Sweeping', query: 'Show all trash, missed collection, illegal dumping, baskets and street sweeping complaints' },
-      { id: 'h2', name: 'B · Sewer & Wastewater', query: 'Show sewer backups, indoor sewage, industrial waste, water leaks and water system complaints' },
-      { id: 'h3', name: 'C · Flooding, Drainage & Streets', query: 'Show standing water, street and sidewalk condition complaints related to drainage and flooding' },
-      { id: 'h4', name: 'D · Hygiene & Pests', query: 'Show rodent, mosquito, dead animal, unsanitary conditions and public toilet complaints' },
-      { id: 'h5', name: 'E · Blockage & Environment', query: 'Show overgrown trees, wood piles, lot conditions, obstructions and abandoned/derelict vehicles' },
+      { 
+        id: 'h1', 
+        name: 'Main Display · All Core Issues', 
+        query: 'Show all trash, sewer, flooding, hygiene, and environmental blockage complaints' 
+      }
     ]
   },
   {
@@ -94,7 +95,6 @@ export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQue
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [mapLevel, setMapLevel] = useState<'borough' | 'district'>('borough');
 
   const handleEditStart = (id: string, currentValue: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -123,23 +123,11 @@ export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQue
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, isExpanded: !p.isExpanded } : p));
   };
 
-  const toggleBorough = (borough: string) => {
-    setFilters(prev => {
-      const exists = prev.boroughs.includes(borough);
-      return {
-        ...prev,
-        communityBoards: [],
-        boroughs: exists ? prev.boroughs.filter(b => b !== borough) : [...prev.boroughs, borough],
-      };
-    });
-  };
-
   const toggleBoard = (board: string) => {
     setFilters(prev => {
       const exists = prev.communityBoards.includes(board);
       return {
         ...prev,
-        boroughs: [],
         communityBoards: exists ? prev.communityBoards.filter(b => b !== board) : [...prev.communityBoards, board],
       };
     });
@@ -149,7 +137,7 @@ export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQue
     setFilters(prev => ({ ...prev, boroughs: [], communityBoards: [] }));
   };
 
-  const hasSpatial = filters.boroughs.length + filters.communityBoards.length > 0;
+  const hasSpatial = filters.communityBoards.length > 0;
 
   return (
     <div className="flex flex-col h-full bg-white text-gray-800 border-r border-gray-200">
@@ -274,50 +262,31 @@ export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQue
         </div>
       </div>
 
-      {/* Spatial Filter Section — interactive map */}
+      {/* Spatial Filter Section — community-district picker */}
       <div className="p-4 border-b border-gray-100 flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-[10px] font-bold uppercase text-gray-400 flex items-center tracking-wider">
-            <Map className="w-3.5 h-3.5 mr-1.5" /> Area
+            <Map className="w-3.5 h-3.5 mr-1.5" /> Area · Community District
           </h3>
-          <div className="flex items-center gap-1">
-            <div className="flex bg-gray-100 p-0.5 rounded-sm border border-gray-200">
-              <button
-                className={`text-[9px] px-1.5 py-0.5 font-bold rounded-sm uppercase ${mapLevel === 'borough' ? 'bg-black text-[#FFE300]' : 'text-gray-600 hover:bg-gray-200'}`}
-                onClick={() => setMapLevel('borough')}
-              >
-                Borough
-              </button>
-              <button
-                className={`text-[9px] px-1.5 py-0.5 font-bold rounded-sm uppercase ${mapLevel === 'district' ? 'bg-black text-[#FFE300]' : 'text-gray-600 hover:bg-gray-200'}`}
-                onClick={() => setMapLevel('district')}
-              >
-                District
-              </button>
-            </div>
-            {hasSpatial && (
-              <button
-                className="text-[9px] px-1.5 py-0.5 font-bold uppercase text-gray-600 hover:text-black border border-gray-300 rounded-sm bg-white"
-                onClick={clearSpatial}
-              >
-                Clear
-              </button>
-            )}
-          </div>
+          {hasSpatial && (
+            <button
+              className="text-[9px] px-1.5 py-0.5 font-bold uppercase text-gray-600 hover:text-black border border-gray-300 rounded-sm bg-white"
+              onClick={clearSpatial}
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         <div className="flex-1 min-h-[240px] bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
           <MapSelector
-            level={mapLevel}
-            selectedBoroughs={filters.boroughs}
             selectedDistricts={filters.communityBoards}
-            onToggleBorough={toggleBorough}
             onToggleDistrict={toggleBoard}
           />
         </div>
         {hasSpatial && (
           <p className="mt-1.5 text-[9px] text-gray-600 font-bold uppercase tracking-tight">
-            Selected: {[...filters.boroughs, ...filters.communityBoards].join(', ')}
+            Selected: {filters.communityBoards.join(', ')}
           </p>
         )}
       </div>

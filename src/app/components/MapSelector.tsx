@@ -1,15 +1,11 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import boroughsGeo from '../../asset/boroughs.geo.json';
 import districtsGeo from '../../asset/community-districts.geo.json';
 
 interface MapSelectorProps {
-  level: 'borough' | 'district';
-  selectedBoroughs: string[];
   selectedDistricts: string[];
-  onToggleBorough: (name: string) => void;
   onToggleDistrict: (code: string) => void;
 }
 
@@ -32,44 +28,24 @@ const cdCodeToBoard = (boroCD: number): string => {
 const NYC_CENTER: [number, number] = [40.7128, -74.0060];
 
 export const MapSelector = ({
-  level,
-  selectedBoroughs,
   selectedDistricts,
-  onToggleBorough,
   onToggleDistrict,
 }: MapSelectorProps) => {
-  const data = useMemo(
-    () => (level === 'borough' ? boroughsGeo : districtsGeo) as any,
-    [level]
-  );
-
   const styleFn = (feature: any) => {
-    let active = false;
-    if (level === 'borough') {
-      active = selectedBoroughs.includes(feature.properties.boroname);
-    } else {
-      const code = cdCodeToBoard(feature.properties.BoroCD);
-      active = selectedDistricts.includes(code);
-    }
+    const code = cdCodeToBoard(feature.properties.BoroCD);
+    const active = selectedDistricts.includes(code);
     return {
-      color: '#000',
-      weight: active ? 2 : 1,
-      fillColor: active ? '#FFE300' : '#cbd5e1',
-      fillOpacity: active ? 0.7 : 0.25,
+      color: active ? '#000' : '#475569',
+      weight: active ? 1.5 : 0.6,
+      fillColor: active ? '#FFE300' : '#e2e8f0',
+      fillOpacity: active ? 0.7 : 0.18,
     };
   };
 
   const onEachFeature = (feature: any, layer: L.Layer) => {
-    let label = '';
-    if (level === 'borough') {
-      label = feature.properties.boroname;
-      layer.on('click', () => onToggleBorough(feature.properties.boroname));
-    } else {
-      const code = cdCodeToBoard(feature.properties.BoroCD);
-      label = code;
-      layer.on('click', () => onToggleDistrict(code));
-    }
-    layer.bindTooltip(label, { sticky: true, direction: 'top' });
+    const code = cdCodeToBoard(feature.properties.BoroCD);
+    layer.on('click', () => onToggleDistrict(code));
+    layer.bindTooltip(code, { sticky: true, direction: 'top' });
   };
 
   return (
@@ -86,8 +62,8 @@ export const MapSelector = ({
         maxZoom={19}
       />
       <GeoJSON
-        key={`${level}-${selectedBoroughs.join(',')}-${selectedDistricts.join(',')}`}
-        data={data}
+        key={`districts-${selectedDistricts.join(',')}`}
+        data={districtsGeo as any}
         style={styleFn}
         onEachFeature={onEachFeature}
       />

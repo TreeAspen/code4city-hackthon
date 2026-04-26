@@ -1,88 +1,122 @@
-import React, { useMemo } from 'react';
-import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, GeoJSON, useMap, CircleMarker, Tooltip as LeafletTooltip, ZoomControl } from 'react-leaflet';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import boroughsGeo from '../../asset/boroughs.geo.json';
+import 'leaflet.heat';
+import districtsGeo from '../../asset/community-districts.geo.json';
 import { Incident311 } from '../types';
+import { BucketLetter, BUCKET_COLORS, TYPE_TO_BUCKET } from '../buckets';
 
 interface DensityMapProps {
   data: Incident311[];
+  viewType: 'total' | 'category';
+  activeCategories: BucketLetter[];
 }
 
 const NYC_CENTER: [number, number] = [40.7128, -74.0060];
 
-// Sequential yellow scale (light → strong) — same hue as accent color #FFE300.
-const colorFor = (count: number, max: number) => {
-  if (count === 0) return '#f1f5f9';
-  const t = max > 0 ? count / max : 0;
-  if (t > 0.8) return '#b8860b';
-  if (t > 0.6) return '#daa520';
-  if (t > 0.4) return '#f0c419';
-  if (t > 0.2) return '#ffd84d';
-  return '#fff2a8';
-};
+// 热力图层组件 (用于 Total 视图)
+const HeatLayer = ({ data }: { data: Incident311[] }) => {
+  const map = useMap();
+  const layerRef = useRef<any>(null);
 
-export const DensityMap = ({ data }: DensityMapProps) => {
-  const counts = useMemo(() => {
-    const map: Record<string, number> = {};
-    data.forEach(d => {
-      map[d.borough] = (map[d.borough] || 0) + 1;
-    });
-    return map;
+  const points = useMemo(() => {
+    // 聚合有坐标的数据
+    return data.filter(d => d.latitude && d.longitude).map(d => [d.latitude, d.longitude, 1] as [number, number, number]);
   }, [data]);
 
-  const max = Math.max(0, ...Object.values(counts));
+  useEffect(() => {
+    if (layerRef.current) map.removeLayer(layerRef.current);
+    if (points.length === 0) return;
+    
+    layerRef.current = (L as any).heatLayer(points, {
+      radius: 20,
+      blur: 15,
+      maxZoom: 14,
+      max: 2.0,
+      gradient: { 0.2: '#fff7d6', 0.4: '#ffe58a', 0.6: '#f5b400', 0.8: '#d97706', 1.0: '#7c2d12' },
+    }).addTo(map);
 
-  const styleFn = (feature: any) => {
-    const name = feature.properties.boroname;
-    const c = counts[name] || 0;
-    return {
-      color: '#000',
-      weight: 1,
-      fillColor: colorFor(c, max),
-      fillOpacity: 0.75,
-    };
-  };
+    return () => { if (layerRef.current) map.removeLayer(layerRef.current); };
+  }, [map, points]);
 
-  const onEachFeature = (feature: any, layer: any) => {
-    const name = feature.properties.boroname;
-    const c = counts[name] || 0;
-    layer.bindTooltip(`${name}: ${c}`, { sticky: true, direction: 'top' });
-  };
+  return null;
+}
+
+export const DensityMap = ({ data, viewType, activeCategories }: DensityMapProps) => {
+  // 分类视图的散点数据
+  const categoryPoints = useMemo(() => {
+    if (viewType === 'total') return [];
+    return data.filter(d => {
+      if (!d.latitude || !d.longitude) return false;
+      const bucket = TYPE_TO_BUCKET[d.complaintType];
+      return bucket && activeCategories.includes(bucket);
+    });
+  }, [data, viewType, activeCategories]);
 
   return (
     <div className="relative h-full w-full">
       <MapContainer
         center={NYC_CENTER}
-        zoom={9}
+        zoom={10}
         style={{ height: '100%', width: '100%' }}
-        scrollWheelZoom={false}
-        zoomControl={false}
+        scrollWheelZoom={true} // 开启鼠标滚轮缩放
+        zoomControl={false}    // 关闭默认位置的缩放控件，我们在下面自定义位置
         attributionControl={false}
       >
+        <ZoomControl position="topleft" />
+        
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           subdomains="abcd"
           maxZoom={19}
         />
+        
         <GeoJSON
-          key={`density-${data.length}-${max}`}
-          data={boroughsGeo as any}
-          style={styleFn}
-          onEachFeature={onEachFeature}
+          data={districtsGeo as any}
+          style={{ color: '#475569', weight: 0.5, fillOpacity: 0, opacity: 0.6 }}
         />
+
+        {/* 渲染热力图 */}
+        {viewType === 'total' && <HeatLayer data={data} />}
+
+        {/* 渲染分类彩色散点图层 */}
+        {viewType === 'category' && categoryPoints.map(point => {
+           const bucket = TYPE_TO_BUCKET[point.complaintType] as BucketLetter;
+           return (
+             <CircleMarker
+               key={point.id}
+               center={[point.latitude!, point.longitude!]}
+               radius={4}
+               pathOptions={{
+                 color: BUCKET_COLORS[bucket],
+                 fillColor: BUCKET_COLORS[bucket],
+                 fillOpacity: 0.6,
+                 weight: 1
+               }}
+             >
+               <LeafletTooltip direction="top" opacity={1}>
+                 <span className="text-[10px] font-bold">{point.complaintType}</span>
+               </LeafletTooltip>
+             </CircleMarker>
+           );
+        })}
       </MapContainer>
-      {/* Legend */}
-      <div className="absolute bottom-1 right-1 z-[400] bg-white/90 border border-gray-200 rounded px-1.5 py-1 text-[8px] font-bold text-gray-700 uppercase">
-        <div className="flex items-center gap-1">
-          <span>Low</span>
-          <span className="inline-block w-3 h-2" style={{ background: '#fff2a8' }} />
-          <span className="inline-block w-3 h-2" style={{ background: '#ffd84d' }} />
-          <span className="inline-block w-3 h-2" style={{ background: '#f0c419' }} />
-          <span className="inline-block w-3 h-2" style={{ background: '#daa520' }} />
-          <span className="inline-block w-3 h-2" style={{ background: '#b8860b' }} />
-          <span>High</span>
+
+      {/* 热力图图例 (仅在 Total 下显示) */}
+      {viewType === 'total' && (
+        <div className="absolute bottom-1 right-1 z-[400] bg-white/90 border border-gray-200 rounded px-1.5 py-1 text-[8px] font-bold text-gray-700 uppercase shadow-sm">
+          <div className="flex items-center gap-1">
+            <span>Low</span>
+            <span className="inline-block w-3 h-2" style={{ background: '#fff7d6' }} />
+            <span className="inline-block w-3 h-2" style={{ background: '#ffe58a' }} />
+            <span className="inline-block w-3 h-2" style={{ background: '#f5b400' }} />
+            <span className="inline-block w-3 h-2" style={{ background: '#d97706' }} />
+            <span className="inline-block w-3 h-2" style={{ background: '#7c2d12' }} />
+            <span>High</span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
