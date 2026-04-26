@@ -80,8 +80,10 @@ export const MapSelector = ({
       scrollWheelZoom={false}
     >
       <TileLayer
-        attribution='&copy; OpenStreetMap'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; OpenStreetMap &copy; CARTO'
+        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        subdomains="abcd"
+        maxZoom={19}
       />
       <GeoJSON
         key={`${level}-${selectedBoroughs.join(',')}-${selectedDistricts.join(',')}`}

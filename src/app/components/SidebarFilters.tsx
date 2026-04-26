@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FilterState } from '../types';
-import { Map, Calendar, MapPin, Search, History, Folder, Edit2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Map, Calendar, History, Folder, Edit2, ChevronDown, ChevronRight } from 'lucide-react';
+import { MapSelector } from './MapSelector';
 
 interface SidebarFiltersProps {
   filters: FilterState;
@@ -36,20 +37,11 @@ const INITIAL_PROJECTS: Project[] = [
   }
 ];
 
-const BOROUGHS = ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'];
-const COMMUNITY_BOARDS = [
-  'MN-01', 'MN-03', 'MN-05', 
-  'BK-01', 'BK-02', 'BK-05',
-  'QN-01', 'QN-02', 'QN-07',
-  'BX-03', 'BX-04', 'BX-05',
-  'SI-01', 'SI-02'
-];
-
 export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQuery }: SidebarFiltersProps) => {
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [geoLevel, setGeoLevel] = useState<'borough' | 'community'>('borough');
+  const [mapLevel, setMapLevel] = useState<'borough' | 'district'>('borough');
 
   const handleEditStart = (id: string, currentValue: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -79,22 +71,32 @@ export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQue
   };
 
   const toggleBorough = (borough: string) => {
-    setFilters(prev => ({
-      ...prev,
-      boroughs: prev.boroughs.includes(borough)
-        ? prev.boroughs.filter(b => b !== borough)
-        : [...prev.boroughs, borough]
-    }));
+    setFilters(prev => {
+      const exists = prev.boroughs.includes(borough);
+      return {
+        ...prev,
+        communityBoards: [],
+        boroughs: exists ? prev.boroughs.filter(b => b !== borough) : [...prev.boroughs, borough],
+      };
+    });
   };
 
   const toggleBoard = (board: string) => {
-    setFilters(prev => ({
-      ...prev,
-      communityBoards: prev.communityBoards.includes(board)
-        ? prev.communityBoards.filter(b => b !== board)
-        : [...prev.communityBoards, board]
-    }));
+    setFilters(prev => {
+      const exists = prev.communityBoards.includes(board);
+      return {
+        ...prev,
+        boroughs: [],
+        communityBoards: exists ? prev.communityBoards.filter(b => b !== board) : [...prev.communityBoards, board],
+      };
+    });
   };
+
+  const clearSpatial = () => {
+    setFilters(prev => ({ ...prev, boroughs: [], communityBoards: [] }));
+  };
+
+  const hasSpatial = filters.boroughs.length + filters.communityBoards.length > 0;
 
   return (
     <div className="flex flex-col h-full bg-white text-gray-800 border-r border-gray-200">
@@ -219,85 +221,52 @@ export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQue
         </div>
       </div>
 
-      {/* Spatial Filter Section */}
-      <div className="p-4 border-b border-gray-100 flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between mb-3">
+      {/* Spatial Filter Section — interactive map */}
+      <div className="p-4 border-b border-gray-100 flex-1 flex flex-col min-h-0">
+        <div className="flex items-center justify-between mb-2">
           <h3 className="text-[10px] font-bold uppercase text-gray-400 flex items-center tracking-wider">
             <Map className="w-3.5 h-3.5 mr-1.5" /> Area
           </h3>
-          <span className="text-[10px] bg-[#FFE300] text-black border border-black/20 rounded px-2 py-0.5 font-bold uppercase">NYC Map</span>
-        </div>
-
-        {/* Mock Map Area */}
-        <div className="w-full h-32 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center mb-6 relative overflow-hidden group shadow-sm">
-          <MapPin className="text-gray-400 w-8 h-8" />
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-5 transition-all flex items-center justify-center cursor-pointer">
-            <span className="text-sm font-bold text-black opacity-0 group-hover:opacity-100 bg-[#FFE300] px-3 py-1.5 rounded-md shadow-sm">Select on Map</span>
+          <div className="flex items-center gap-1">
+            <div className="flex bg-gray-100 p-0.5 rounded-sm border border-gray-200">
+              <button
+                className={`text-[9px] px-1.5 py-0.5 font-bold rounded-sm uppercase ${mapLevel === 'borough' ? 'bg-black text-[#FFE300]' : 'text-gray-600 hover:bg-gray-200'}`}
+                onClick={() => setMapLevel('borough')}
+              >
+                Borough
+              </button>
+              <button
+                className={`text-[9px] px-1.5 py-0.5 font-bold rounded-sm uppercase ${mapLevel === 'district' ? 'bg-black text-[#FFE300]' : 'text-gray-600 hover:bg-gray-200'}`}
+                onClick={() => setMapLevel('district')}
+              >
+                District
+              </button>
+            </div>
+            {hasSpatial && (
+              <button
+                className="text-[9px] px-1.5 py-0.5 font-bold uppercase text-gray-600 hover:text-black border border-gray-300 rounded-sm bg-white"
+                onClick={clearSpatial}
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex bg-gray-50 p-1 border border-gray-100 rounded-sm">
-            <button
-              className={`flex-1 text-[10px] font-bold uppercase py-1.5 px-2 rounded-sm transition-colors ${geoLevel === 'borough' ? 'bg-[#FFE300] text-black shadow-sm' : 'text-gray-500 hover:bg-gray-200 hover:text-black'}`}
-              onClick={() => {
-                setGeoLevel('borough');
-                setFilters(prev => ({ ...prev, communityBoards: [] }));
-              }}
-            >
-              Boroughs
-            </button>
-            <button
-              className={`flex-1 text-[10px] font-bold uppercase py-1.5 px-2 rounded-sm transition-colors ${geoLevel === 'community' ? 'bg-[#FFE300] text-black shadow-sm' : 'text-gray-500 hover:bg-gray-200 hover:text-black'}`}
-              onClick={() => {
-                setGeoLevel('community');
-                setFilters(prev => ({ ...prev, boroughs: [] }));
-              }}
-            >Community Boards</button>
-          </div>
-
-          {geoLevel === 'borough' && (
-            <div className="space-y-1.5">
-              {BOROUGHS.map(b => (
-                <label key={b} className="flex items-center space-x-2 cursor-pointer group">
-                  <input 
-                    type="checkbox" 
-                    className="form-checkbox text-black rounded-sm border-gray-300 focus:ring-black w-3.5 h-3.5 cursor-pointer accent-black"
-                    checked={filters.boroughs.includes(b)}
-                    onChange={() => toggleBorough(b)}
-                  />
-                  <span className="text-xs text-gray-600 group-hover:text-gray-900 transition-colors">{b}</span>
-                </label>
-              ))}
-            </div>
-          )}
-
-          {geoLevel === 'community' && (
-            <div>
-              <div className="relative mb-2">
-                <Search className="w-3.5 h-3.5 absolute left-2 top-2 text-gray-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search boards..." 
-                  className="w-full text-[10px] py-1.5 pl-7 pr-2 bg-gray-50 border border-gray-200 rounded-sm focus:outline-none focus:border-black"
-                />
-              </div>
-              <div className="max-h-32 overflow-y-auto space-y-1.5 pr-2 custom-scrollbar">
-                {COMMUNITY_BOARDS.map(cb => (
-                  <label key={cb} className="flex items-center space-x-2 cursor-pointer group">
-                    <input 
-                      type="checkbox" 
-                      className="form-checkbox text-black rounded-sm border-gray-300 focus:ring-black w-3.5 h-3.5 cursor-pointer accent-black"
-                      checked={filters.communityBoards.includes(cb)}
-                      onChange={() => toggleBoard(cb)}
-                    />
-                    <span className="text-[10px] text-gray-500 group-hover:text-gray-900 transition-colors">{cb}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
+        <div className="flex-1 min-h-[240px] bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+          <MapSelector
+            level={mapLevel}
+            selectedBoroughs={filters.boroughs}
+            selectedDistricts={filters.communityBoards}
+            onToggleBorough={toggleBorough}
+            onToggleDistrict={toggleBoard}
+          />
         </div>
+        {hasSpatial && (
+          <p className="mt-1.5 text-[9px] text-gray-600 font-bold uppercase tracking-tight">
+            Selected: {[...filters.boroughs, ...filters.communityBoards].join(', ')}
+          </p>
+        )}
       </div>
       
     </div>
