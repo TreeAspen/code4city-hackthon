@@ -238,7 +238,7 @@ export default function Dashboard() {
     <DndProvider backend={HTML5Backend}>
       <DashboardLayout
         sidebar={<SidebarFilters filters={filters} setFilters={setFilters} onSelectHistory={handleAIQuery} activeQuery={activeQuery} />}
-        rightSidebar={<AnalyticsSidebar data={filteredData} />}
+        rightSidebar={<AnalyticsSidebar data={filteredData} filters={filters} setFilters={setFilters} />}
         content={
           <div className="flex flex-col h-full space-y-4">
             <AIQueryBuilder 
