@@ -15,13 +15,18 @@ const jsonOutputPath = './src/asset/311_data_preprocessed.json';
 const PER_MONTH = Number(process.env.PER_MONTH ?? 1200);
 const MONTHS = Number(process.env.MONTHS ?? 3);
 
-// 社区编号转换函数
+// "01 MANHATTAN" → "MN-01". Anything that doesn't parse (e.g. "0 Unspecified",
+// "Unspecified BROOKLYN") becomes '' — never pass the raw string through, or it
+// leaks into the district picker as a bogus option.
 function formatCommunityBoard(cb) {
-  if (!cb || cb === 'Unspecified') return '';
-  const match = cb.match(/^(\d{2})\s+(.+)$/i);
-  if (!match) return cb;
+  if (!cb) return '';
+  const match = cb.trim().match(/^(\d{1,2})\s+(.+)$/i);
+  if (!match) return '';
   const boroMap = { 'MANHATTAN': 'MN', 'BRONX': 'BX', 'BROOKLYN': 'BK', 'QUEENS': 'QN', 'STATEN ISLAND': 'SI' };
-  return `${boroMap[match[2].toUpperCase().trim()] || 'XX'}-${match[1]}`;
+  const prefix = boroMap[match[2].toUpperCase().trim()];
+  if (!prefix) return '';
+  const num = match[1].padStart(2, '0');
+  return num === '00' ? '' : `${prefix}-${num}`;
 }
 
 console.log(`Sampling ${PER_MONTH}/month over the ${MONTHS} most recent months...`);

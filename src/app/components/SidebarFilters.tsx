@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { FilterState } from '../types';
-import { Map, Calendar, History, Folder, Edit2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Map, Calendar, History, Folder, Edit2, ChevronDown, ChevronRight, List } from 'lucide-react';
 import { MapSelector } from './MapSelector';
+import { DistrictList } from './DistrictList';
 
 interface SidebarFiltersProps {
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   onSelectHistory?: (query: string) => void;
   activeQuery?: string;
+  /** Record count per community district, shown beside each row in list view. */
+  districtCounts?: Record<string, number>;
 }
 
 type HistoryItem = { id: string; name: string; query: string };
@@ -91,10 +94,11 @@ const INITIAL_PROJECTS: Project[] = [
   },
 ];
 
-export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQuery }: SidebarFiltersProps) => {
+export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQuery, districtCounts }: SidebarFiltersProps) => {
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [areaView, setAreaView] = useState<'map' | 'list'>('map');
 
   const handleEditStart = (id: string, currentValue: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -131,6 +135,10 @@ export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQue
         communityBoards: exists ? prev.communityBoards.filter(b => b !== board) : [...prev.communityBoards, board],
       };
     });
+  };
+
+  const setBoards = (codes: string[]) => {
+    setFilters(prev => ({ ...prev, communityBoards: codes }));
   };
 
   const clearSpatial = () => {
@@ -278,14 +286,41 @@ export const SidebarFilters = ({ filters, setFilters, onSelectHistory, activeQue
           )}
         </div>
 
-        <div className="flex-1 min-h-[240px] bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-          <MapSelector
-            selectedDistricts={filters.communityBoards}
-            onToggleDistrict={toggleBoard}
-          />
+        {/* Map and list are two views onto the same selection. */}
+        <div className="flex mb-2 bg-gray-100 p-0.5 rounded-sm border border-gray-200 shrink-0">
+          {(['map', 'list'] as const).map(view => (
+            <button
+              key={view}
+              onClick={() => setAreaView(view)}
+              className={`flex-1 flex items-center justify-center gap-1 text-[10px] py-1 font-bold rounded-sm uppercase tracking-tight transition-colors ${
+                areaView === view ? 'bg-black text-[#FFE300] shadow-sm' : 'text-gray-600 hover:bg-gray-200 hover:text-black'
+              }`}
+            >
+              {view === 'map' ? <Map className="w-3 h-3" /> : <List className="w-3 h-3" />}
+              {view}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 min-h-[240px] bg-white rounded-lg overflow-hidden shadow-sm">
+          {areaView === 'map' ? (
+            <div className="h-full border border-gray-200 rounded-lg overflow-hidden">
+              <MapSelector
+                selectedDistricts={filters.communityBoards}
+                onToggleDistrict={toggleBoard}
+              />
+            </div>
+          ) : (
+            <DistrictList
+              selected={filters.communityBoards}
+              onToggle={toggleBoard}
+              onSetMany={setBoards}
+              counts={districtCounts}
+            />
+          )}
         </div>
         {hasSpatial && (
-          <p className="mt-1.5 text-[9px] text-gray-600 font-bold uppercase tracking-tight">
+          <p className="mt-1.5 text-[9px] text-gray-600 font-bold uppercase tracking-tight truncate" title={filters.communityBoards.join(', ')}>
             Selected: {filters.communityBoards.join(', ')}
           </p>
         )}

@@ -3,27 +3,12 @@ import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import districtsGeo from '../../asset/community-districts.geo.json';
+import { cdCodeToBoard, isRealDistrict } from '../districts';
 
 interface MapSelectorProps {
   selectedDistricts: string[];
   onToggleDistrict: (code: string) => void;
 }
-
-// BoroCD numeric prefix → community-board prefix used in mock data
-const BORO_PREFIX: Record<number, string> = {
-  1: 'MN',
-  2: 'BX',
-  3: 'BK',
-  4: 'QN',
-  5: 'SI',
-};
-
-const cdCodeToBoard = (boroCD: number): string => {
-  const boro = Math.floor(boroCD / 100);
-  const cd = boroCD % 100;
-  const prefix = BORO_PREFIX[boro] ?? 'XX';
-  return `${prefix}-${String(cd).padStart(2, '0')}`;
-};
 
 const NYC_CENTER: [number, number] = [40.7128, -74.0060];
 
@@ -32,8 +17,12 @@ export const MapSelector = ({
   onToggleDistrict,
 }: MapSelectorProps) => {
   const styleFn = (feature: any) => {
-    const code = cdCodeToBoard(feature.properties.BoroCD);
-    const active = selectedDistricts.includes(code);
+    const boroCD = feature.properties.BoroCD;
+    // Parks / airports / Rikers: drawn for context, but not selectable.
+    if (!isRealDistrict(boroCD)) {
+      return { color: '#94a3b8', weight: 0.4, fillColor: '#f1f5f9', fillOpacity: 0.35 };
+    }
+    const active = selectedDistricts.includes(cdCodeToBoard(boroCD));
     return {
       color: active ? '#000' : '#475569',
       weight: active ? 1.5 : 0.6,
@@ -43,7 +32,12 @@ export const MapSelector = ({
   };
 
   const onEachFeature = (feature: any, layer: L.Layer) => {
-    const code = cdCodeToBoard(feature.properties.BoroCD);
+    const boroCD = feature.properties.BoroCD;
+    if (!isRealDistrict(boroCD)) {
+      layer.bindTooltip('Park / airport — no community district', { sticky: true, direction: 'top' });
+      return;
+    }
+    const code = cdCodeToBoard(boroCD);
     layer.on('click', () => onToggleDistrict(code));
     layer.bindTooltip(code, { sticky: true, direction: 'top' });
   };

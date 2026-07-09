@@ -221,42 +221,58 @@ export default function Dashboard() {
     ]);
   }
 
+  const inDateRange = (d: Incident311) => {
+    const dayStr = String(d?.createdDate || '').slice(0, 10);
+    return dayStr.length === 10 && dayStr >= filters.startDate && dayStr <= filters.endDate;
+  };
+
+  const inSelectedCategories = (d: Incident311, allowed: Set<string>) =>
+    Boolean(d?.complaintType) && allowed.has(d.complaintType);
+
+  const allowedTypes = useMemo(
+    () =>
+      new Set(
+        (categories ?? [])
+          .filter(c => c.id !== 'excluded')
+          .flatMap(c => (c.subCategories ? c.subCategories.map(s => s.name) : [])),
+      ),
+    [categories],
+  );
+
+  // Per-district counts for the list view: everything the current time range and
+  // semantic selection allow, *before* the spatial filter — otherwise selecting
+  // one district would zero out every other row.
+  const districtCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const d of rawData) {
+      if (!d.communityBoard) continue;
+      if (!inDateRange(d)) continue;
+      if (allowedTypes.size > 0 && !inSelectedCategories(d, allowedTypes)) continue;
+      counts[d.communityBoard] = (counts[d.communityBoard] ?? 0) + 1;
+    }
+    return counts;
+  }, [rawData, filters.startDate, filters.endDate, allowedTypes]);
+
   // 计算过滤后的数据
   const filteredData = useMemo(() => {
     if (!rawData || !Array.isArray(rawData)) return [];
-    let data = rawData;
-
-    // Apply Time Filter
-    data = data.filter(d => {
-      const dateString = String(d?.createdDate || ''); 
-      if (dateString.length < 10) return false; 
-      
-      const dayStr = dateString.slice(0, 10);
-      return dayStr >= filters.startDate && dayStr <= filters.endDate;
-    });
+    let data = rawData.filter(inDateRange);
 
     // Apply Spatial Filter
     if (filters.communityBoards && filters.communityBoards.length > 0) {
-      data = data.filter(d => {
-        const board = d?.communityBoard || '';
-        return filters.communityBoards.includes(board);
-      });
+      const boards = new Set(filters.communityBoards);
+      data = data.filter(d => boards.has(d?.communityBoard || ''));
     }
 
     // Apply Category Filter. The board always holds official 311 complaint
     // types, so a record is kept exactly when its complaintType sits in a
     // non-excluded column — what the analyst sees is what the filter does.
-    if (categories && categories.length > 0) {
-      const allowedTypes = new Set(
-        categories
-          .filter(c => c.id !== 'excluded')
-          .flatMap(c => c.subCategories ? c.subCategories.map(s => s.name) : [])
-      );
-      data = data.filter(d => d?.complaintType && allowedTypes.has(d.complaintType));
+    if (allowedTypes.size > 0) {
+      data = data.filter(d => inSelectedCategories(d, allowedTypes));
     }
 
     return data;
-  }, [filters, categories, rawData]);
+  }, [filters, allowedTypes, rawData]);
 
   if (rawData.length === 0 && !isLoadingData) {
     return (
@@ -274,7 +290,15 @@ export default function Dashboard() {
   return (
     <DndProvider backend={HTML5Backend}>
       <DashboardLayout
-        sidebar={<SidebarFilters filters={filters} setFilters={setFilters} onSelectHistory={handleAIQuery} activeQuery={appliedQuery} />}
+        sidebar={
+          <SidebarFilters
+            filters={filters}
+            setFilters={setFilters}
+            onSelectHistory={handleAIQuery}
+            activeQuery={appliedQuery}
+            districtCounts={districtCounts}
+          />
+        }
         rightSidebar={<AnalyticsSidebar data={filteredData} />}
         content={
           <div className="flex flex-col h-full">
