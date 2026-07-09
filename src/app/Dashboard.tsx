@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { DashboardLayout } from './components/DashboardLayout';
 import { SidebarFilters } from './components/SidebarFilters';
 import { AIQueryBuilder } from './components/AIQueryBuilder';
@@ -9,25 +9,49 @@ import { FilterState, MainCategory, Incident311 } from './types';
 import { buildCategoriesForQuery, BUCKETS, BUCKET_LETTERS } from './buckets';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { fetchIncidents, recentDateRange } from './services/api311';
+import { buildCategoriesWithLLM, buildTagCategoriesWithLLM, isLLMConfigured } from './services/llmMapper';
 
 // 引入预处理好的 JSON 数据
 import preprocessedData from '../asset/311_data_preprocessed.json';
 
+// 可选：离线打好 facet 标签的同一批 3000 条（scripts/tagRecords.mjs 生成）。
+// 文件不存在时 glob 为空对象，自动退回未打标数据。
+const taggedModules = import.meta.glob('../asset/311_data_tagged.json', { eager: true }) as Record<
+  string,
+  { default: Incident311[] }
+>;
+const localData: Incident311[] =
+  Object.values(taggedModules)[0]?.default ?? (preprocessedData as Incident311[]);
+
+const USE_LIVE_API = import.meta.env.VITE_USE_LIVE_API === 'true';
+// Live 模式默认关掉伪造层；Demo 模式默认开
+const FAKE_OVERLAY = import.meta.env.VITE_FAKE_OVERLAY !== undefined
+  ? import.meta.env.VITE_FAKE_OVERLAY === 'true'
+  : !USE_LIVE_API;
+
 export default function Dashboard() {
-  const [filters, setFilters] = useState<FilterState>({
-    startDate: '2025-01-01',
-    endDate: '2025-12-31',
-    boroughs: [], 
-    communityBoards: [],
+  const [filters, setFilters] = useState<FilterState>(() => {
+    if (USE_LIVE_API) {
+      const { startDate, endDate } = recentDateRange(30);
+      return { startDate, endDate, boroughs: [], communityBoards: [] };
+    }
+    return {
+      startDate: '2025-01-01',
+      endDate: '2025-12-31',
+      boroughs: [],
+      communityBoards: [],
+    };
   });
 
   // --- Hackathon 终极视觉优化：有规律的抛物线日期 + 随机 A-E 类别 ---
+  // limit = -1 表示不下采样（Live 模式直接覆盖全量真实数据）
   const getFakedSample = (data: Incident311[], limit: number): Incident311[] => {
     if (!Array.isArray(data) || data.length === 0) return [];
-    
-    // 1. 打乱并截取 900 条真实坐标
-    const shuffled = [...data].sort(() => 0.5 - Math.random());
-    const sampled = shuffled.slice(0, limit);
+
+    const sampled = limit < 0
+      ? data
+      : [...data].sort(() => 0.5 - Math.random()).slice(0, limit);
 
     // 辅助函数：根据权重获取随机月份（模拟夏高冬低的真实 311 趋势）
     const getSeasonalMonth = () => {
@@ -43,7 +67,7 @@ export default function Dashboard() {
     };
 
     // 2. 强行伪造完美的规律数据
-    return sampled.map(item => {
+    return sampled.map((item: Incident311) => {
       // --- 伪造随机大类 ---
       const randomBucket = BUCKET_LETTERS[Math.floor(Math.random() * BUCKET_LETTERS.length)];
       const subCats = BUCKETS[randomBucket].subCategories;
@@ -60,16 +84,61 @@ export default function Dashboard() {
 
       return {
         ...item,
-        complaintType: randomType, 
-        createdDate: fakedDate 
+        complaintType: randomType,
+        createdDate: fakedDate,
+        // 伪造层会打乱 complaintType，离线标签随之失效——必须剥离，避免自相矛盾
+        tags: undefined,
       };
     });
   };
 
-  // 抽取 900 条完美视觉数据
-  const safeInitialData: Incident311[] = getFakedSample(preprocessedData as Incident311[], 900);
+  // Demo 模式：本地预处理 JSON + 伪造覆盖层（900 条视觉规整数据）
+  // Live 模式：useEffect 内异步拉取真实 API，初始为空
+  const safeInitialData: Incident311[] = USE_LIVE_API
+    ? []
+    : (FAKE_OVERLAY
+        ? getFakedSample(localData, 900)
+        : localData);
 
-  const [rawData] = useState<Incident311[]>(safeInitialData);
+  const [rawData, setRawData] = useState<Incident311[]>(safeInitialData);
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(USE_LIVE_API);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!USE_LIVE_API) return;
+    let cancelled = false;
+    setIsLoadingData(true);
+    setLoadError(null);
+    fetchIncidents({
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+      limit: 5000,
+    })
+      .then(rows => {
+        if (cancelled) return;
+        const next = FAKE_OVERLAY ? getFakedSample(rows, -1) : rows;
+        setRawData(next);
+      })
+      .catch(err => {
+        if (cancelled) return;
+        console.error('[311 Live API]', err);
+        setLoadError(err instanceof Error ? err.message : String(err));
+        // 失败时回退到本地预处理 JSON
+        setRawData(localData);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingData(false);
+      });
+    return () => { cancelled = true; };
+  }, [filters.startDate, filters.endDate]);
+
+  // 数据集中实际存在的 facet 标签词表（离线打标后非空）。
+  // 非空且配置了 API key 时，查询走 record-level 语义标签模式。
+  const tagVocabulary = useMemo(() => {
+    const s = new Set<string>();
+    rawData.forEach(d => d.tags?.forEach(t => s.add(t)));
+    return [...s].sort();
+  }, [rawData]);
 
   // 默认搜索词改为包含所有触发词的句子，确保一打开页面 5 种颜色全亮！
   const defaultQuery = 'Show all trash, sewer, flooding, hygiene, and blockages';
@@ -77,13 +146,26 @@ export default function Dashboard() {
   const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [activeQuery, setActiveQuery] = useState(defaultQuery);
 
-  const handleAIQuery = (query: string) => {
+  const handleAIQuery = async (query: string) => {
     setIsProcessingAI(true);
     setActiveQuery(query);
-    setTimeout(() => {
+    try {
+      if (isLLMConfigured && tagVocabulary.length > 0) {
+        // Record-level 语义模式：query 分解为 facet 标签分栏，逐条匹配
+        setCategories(await buildTagCategoriesWithLLM(query, tagVocabulary));
+      } else if (isLLMConfigured) {
+        setCategories(await buildCategoriesWithLLM(query));
+      } else {
+        // Demo fallback: deterministic keyword mapping (no API key configured)
+        await new Promise(r => setTimeout(r, 800));
+        setCategories(buildCategoriesForQuery(query));
+      }
+    } catch (err) {
+      console.error('[LLM mapper] falling back to keyword mapping:', err);
       setCategories(buildCategoriesForQuery(query));
+    } finally {
       setIsProcessingAI(false);
-    }, 1500);
+    }
   };
 
   const handleUpdateCategory = (categoryId: string, title: string) => {
@@ -155,24 +237,33 @@ export default function Dashboard() {
       });
     }
 
-    // Apply Category Filter based on A-E buckets
+    // Apply Category Filter — 分栏里既可能是 complaint type（类型模式），
+    // 也可能是 facet 标签（tagged 数据 + LLM 模式）。两个词表不重叠冲突，
+    // 统一按并集匹配：类型命中 或 任一标签命中即保留。
     if (categories && categories.length > 0) {
-      const allowedTypes = new Set(
+      const allowedNames = new Set(
         categories
           .filter(c => c.id !== 'excluded')
           .flatMap(c => c.subCategories ? c.subCategories.map(s => s.name) : [])
       );
-      data = data.filter(d => d?.complaintType && allowedTypes.has(d.complaintType));
+      data = data.filter(d =>
+        (d?.complaintType && allowedNames.has(d.complaintType)) ||
+        (d?.tags?.some(t => allowedNames.has(t)) ?? false)
+      );
     }
 
     return data;
   }, [filters, categories, rawData]);
 
-  if (rawData.length === 0) {
+  if (rawData.length === 0 && !isLoadingData) {
     return (
       <div className="w-full h-screen flex flex-col items-center justify-center bg-gray-50">
         <p className="font-bold text-red-500 uppercase tracking-widest text-sm mb-2">⚠ Data Not Found</p>
-        <p className="text-gray-500 text-xs">Please ensure you ran the preprocess script successfully.</p>
+        <p className="text-gray-500 text-xs">
+          {USE_LIVE_API
+            ? 'Live 311 API returned no records. Check your network or date range.'
+            : 'Please ensure you ran the preprocess script successfully.'}
+        </p>
       </div>
     );
   }
@@ -184,6 +275,13 @@ export default function Dashboard() {
         rightSidebar={<AnalyticsSidebar data={filteredData} />}
         content={
           <div className="flex flex-col h-full">
+            {USE_LIVE_API && (isLoadingData || loadError) && (
+              <div className={`shrink-0 px-4 py-2 text-xs font-bold uppercase tracking-tight border-b-2 border-black ${loadError ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-black'}`}>
+                {loadError
+                  ? `⚠ Live 311 API failed (${loadError}) — falling back to local data.`
+                  : '⏳ Loading live 311 data from NYC Open Data…'}
+              </div>
+            )}
             <div className="shrink-0 border-b border-black/10 shadow-sm z-10">
               <AIQueryBuilder
                 onSearch={handleAIQuery}

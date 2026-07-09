@@ -11,6 +11,8 @@ export interface Incident311 {
   location: string;
   latitude?: number;  // 可选：未来如果需要精确到点的地图渲染可以使用
   longitude?: number; // 可选：未来如果需要精确到点的地图渲染可以使用
+  tags?: string[];    // 离线 LLM 多面向标签（scripts/tagRecords.mjs → 311_data_tagged.json）
+  agency?: string;    // 来源机构（tagged 数据集提供，用于 cross-agency 叙事）
 }
 
 export interface SubCategory {

@@ -90,8 +90,8 @@ export const AIQueryBuilder = ({ onSearch, isProcessing, value, onChange }: AIQu
         </form>
         <div className="mt-2 flex space-x-2 text-[10px] text-black items-center">
           <span className="font-bold uppercase tracking-tight">Try:</span>
-          <button onClick={() => setQuery("Identify all sources of noxious odors")} className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors">Odors</button>
-          <button onClick={() => setQuery("Find construction hazards")} className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors">Hazards</button>
+          <button onClick={() => setQuery("Show flooding and drainage issues")} className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors">Flooding</button>
+          <button onClick={() => setQuery("Find illegal dumping hotspots")} className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors">Illegal Dumping</button>
           <button onClick={() => setQuery("List all rat sightings")} className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors">Rodents</button>
         </div>
       </div>
