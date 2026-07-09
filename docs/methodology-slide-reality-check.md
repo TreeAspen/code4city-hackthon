@@ -51,9 +51,15 @@ Archy 做后端检索工作流,Shu 做前端交互页面。**这是有意的分�
 
 `district ranking` / `trend sparklines (+267%)` / `lift-ranked associations (1.33×)` / `explain panel` —— Shu 的界面没有这些。**那页由 Archy 讲、用 Archy 的系统演示**,且不要与 Shu 的 dashboard 截图相邻。
 
-### 明天用哪个版本?
+### 明天用哪个版本?→ **已定:线上版**
 
-两个都合规(因为分工已明说)。**建议本地版**,正为了演示上面那个设计权衡:一个真实跑着的、受 schema 约束的本地模型,当场把自然语言映射到官方分类,再被人工拖拽校正——活的论据。**线上版作备份**(二维码也指向它),模型失败时代码静默回退到确定性映射,顺势讲"deterministic fallback 也是设计的一部分"。
+https://treeaspen.github.io/code4city-hackthon/ —— 零模型调用,纯确定性,和 Archy slide 8 的 "no generative AI in the answering path" 完全一致。三个策展问题已逐个验证。
+
+**代价**:上面那个"确定性 vs 本地模型"的设计权衡无法现场演示。**所以要用嘴讲**,在 Beat 4(human-in-the-loop)之后顺势带出:
+
+> "The version you're seeing runs zero model calls — the mapping is precomputed. Behind it we also have a build where a small local model does that mapping live, constrained so it can only pick from official complaint types. Archy's serving path chose deterministic rules; that build chose a model. Which one belongs in a government system is exactly the question we'd want your team's opinion on."
+
+**上台前仍要跑 `npm run warmup && npm run dev`**——万一线上站点被网络问题挡住,本地版是备份(它跑同样的三个策展问题,行为一致)。
 
 ## 三、两套系统的技术对照(供你自己心里有数)
 
