@@ -10,7 +10,8 @@ import { buildCategoriesForQuery, BUCKETS, BUCKET_LETTERS } from './buckets';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { fetchIncidents, recentDateRange } from './services/api311';
-import { buildCategoriesWithLLM, buildTagCategoriesWithLLM, isLLMConfigured } from './services/llmMapper';
+import { buildCategoriesWithLLM, isLLMConfigured } from './services/llmMapper';
+import { curatedCategoriesFor, DEFAULT_QUERY } from './curatedQueries';
 
 // 引入预处理好的 JSON 数据
 import preprocessedData from '../asset/311_data_preprocessed.json';
@@ -132,32 +133,30 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [filters.startDate, filters.endDate]);
 
-  // 数据集中实际存在的 facet 标签词表（离线打标后非空）。
-  // 非空且配置了 API key 时，查询走 record-level 语义标签模式。
-  const tagVocabulary = useMemo(() => {
-    const s = new Set<string>();
-    rawData.forEach(d => d.tags?.forEach(t => s.add(t)));
-    return [...s].sort();
-  }, [rawData]);
-
-  // 默认搜索词改为包含所有触发词的句子，确保一打开页面 5 种颜色全亮！
-  const defaultQuery = 'Show all trash, sewer, flooding, hygiene, and blockages';
-  const [categories, setCategories] = useState<MainCategory[]>(() => buildCategoriesForQuery(defaultQuery));
+  // 页面初始即展示 hero 查询的策展结果（无需等待任何模型）
+  const [categories, setCategories] = useState<MainCategory[]>(
+    () => curatedCategoriesFor(DEFAULT_QUERY) ?? buildCategoriesForQuery(DEFAULT_QUERY),
+  );
   const [isProcessingAI, setIsProcessingAI] = useState(false);
-  const [activeQuery, setActiveQuery] = useState(defaultQuery);
+  const [activeQuery, setActiveQuery] = useState(DEFAULT_QUERY);
 
+  // Query → official 311 complaint types, grouped into task-specific columns.
+  // Resolution order:
+  //   1. curated sample question  — exact, no model needed (the deployed build)
+  //   2. LLM                      — semantic grouping of the official labels
+  //   3. keyword mapping          — deterministic fallback, never fails
   const handleAIQuery = async (query: string) => {
     setIsProcessingAI(true);
     setActiveQuery(query);
     try {
-      if (isLLMConfigured && tagVocabulary.length > 0) {
-        // Record-level 语义模式：query 分解为 facet 标签分栏，逐条匹配
-        setCategories(await buildTagCategoriesWithLLM(query, tagVocabulary));
+      const curated = curatedCategoriesFor(query);
+      if (curated) {
+        await new Promise(r => setTimeout(r, 600)); // let the pending state register
+        setCategories(curated);
       } else if (isLLMConfigured) {
         setCategories(await buildCategoriesWithLLM(query));
       } else {
-        // Demo fallback: deterministic keyword mapping (no API key configured)
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 600));
         setCategories(buildCategoriesForQuery(query));
       }
     } catch (err) {
@@ -237,19 +236,16 @@ export default function Dashboard() {
       });
     }
 
-    // Apply Category Filter — 分栏里既可能是 complaint type（类型模式），
-    // 也可能是 facet 标签（tagged 数据 + LLM 模式）。两个词表不重叠冲突，
-    // 统一按并集匹配：类型命中 或 任一标签命中即保留。
+    // Apply Category Filter. The board always holds official 311 complaint
+    // types, so a record is kept exactly when its complaintType sits in a
+    // non-excluded column — what the analyst sees is what the filter does.
     if (categories && categories.length > 0) {
-      const allowedNames = new Set(
+      const allowedTypes = new Set(
         categories
           .filter(c => c.id !== 'excluded')
           .flatMap(c => c.subCategories ? c.subCategories.map(s => s.name) : [])
       );
-      data = data.filter(d =>
-        (d?.complaintType && allowedNames.has(d.complaintType)) ||
-        (d?.tags?.some(t => allowedNames.has(t)) ?? false)
-      );
+      data = data.filter(d => d?.complaintType && allowedTypes.has(d.complaintType));
     }
 
     return data;

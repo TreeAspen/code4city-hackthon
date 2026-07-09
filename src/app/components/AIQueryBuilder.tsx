@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sparkles, ArrowRight, X } from 'lucide-react';
 import clsx from 'clsx';
+import { CURATED_QUERIES } from '../curatedQueries';
 
 interface AIQueryBuilderProps {
   onSearch: (query: string) => void;
@@ -90,9 +91,15 @@ export const AIQueryBuilder = ({ onSearch, isProcessing, value, onChange }: AIQu
         </form>
         <div className="mt-2 flex space-x-2 text-[10px] text-black items-center">
           <span className="font-bold uppercase tracking-tight">Try:</span>
-          <button onClick={() => setQuery("Show flooding and drainage issues")} className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors">Flooding</button>
-          <button onClick={() => setQuery("Find illegal dumping hotspots")} className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors">Illegal Dumping</button>
-          <button onClick={() => setQuery("List all rat sightings")} className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors">Rodents</button>
+          {CURATED_QUERIES.map(({ query: q, chip }) => (
+            <button
+              key={chip}
+              onClick={() => { setQuery(q); onSearch(q); }}
+              className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors"
+            >
+              {chip}
+            </button>
+          ))}
         </div>
       </div>
     </div>

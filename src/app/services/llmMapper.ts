@@ -1,12 +1,11 @@
 // Semantic query → category mapping via a free LLM provider (see llmClient.ts).
 //
-// Two modes, sharing one core call:
-//  - buildCategoriesWithLLM:    query → official complaint-type labels (always available)
-//  - buildTagCategoriesWithLLM: query → per-record facet tags (available when the
-//    dataset was enriched offline by scripts/tagRecords.mjs)
+// The model only ever *groups* the official 311 complaint types into columns
+// that answer the analyst's question; the enum in the response schema means it
+// physically cannot emit a label that isn't in the official taxonomy.
 //
-// Dashboard falls back to the regex mapper in buckets.ts on any error or when
-// no provider is configured.
+// Dashboard resolves curated sample questions first, calls this second, and
+// falls back to the regex mapper in buckets.ts on any error.
 
 import { MainCategory, SubCategory } from '../types';
 import { BUCKETS, BUCKET_LETTERS } from '../buckets';
@@ -22,8 +21,6 @@ const SUB_BY_NAME: Map<string, SubCategory> = new Map(
 const ALL_TYPE_NAMES = [...SUB_BY_NAME.keys()];
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-
-const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 // Plain JSON schema (no additionalProperties — Gemini's responseSchema rejects it;
 // unknown extra fields are harmless since we only read known ones).
@@ -56,12 +53,6 @@ const SHARED_RULES = `Rules:
 - Use only labels from the provided list, spelled exactly as given.`;
 
 const TYPE_PROMPT = `You map a data analyst's plain-English query about NYC 311 data to the official 311 complaint-type labels it semantically covers.
-
-${SHARED_RULES}`;
-
-// NB: don't mention how many tags each *record* carries — the model anchors on
-// that number and under-selects. Talk only about selecting query-relevant tags.
-const TAG_PROMPT = `You map a data analyst's plain-English query about NYC 311 data to semantic facet tags. Records are pre-tagged with these facets, so selecting a tag retrieves every record touching that facet — a trash-clogged catch basin is reachable through its trash, catch-basin, and standing-water facets alike.
 
 ${SHARED_RULES}`;
 
@@ -129,9 +120,3 @@ export async function buildCategoriesWithLLM(query: string): Promise<MainCategor
   return assembleCategories(groups, ALL_TYPE_NAMES, name => SUB_BY_NAME.get(name)!);
 }
 
-// Query → facet tags (record-level semantic matching). `tagVocabulary` is the
-// set of tags actually present in the loaded dataset.
-export async function buildTagCategoriesWithLLM(query: string, tagVocabulary: string[]): Promise<MainCategory[]> {
-  const groups = await mapQueryToGroups(query, tagVocabulary, TAG_PROMPT, 'Available facet tags');
-  return assembleCategories(groups, tagVocabulary, name => ({ id: `tag-${slug(name)}`, name }));
-}

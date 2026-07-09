@@ -73,17 +73,17 @@
 
 "**One — data pipeline.** Incremental pull from the Socrata open-data API into Postgres with pgvector."
 
-"**Two — the semantic enrichment layer.** This is the core. We take the 191 categories and their problem types as context, and we run an LLM batch offline to attach *multi-facet* tags to every record — a controlled vocabulary, cross-agency by construction. A record can carry trash, catch-basin, and standing-water facets at the same time. Then hybrid retrieval: SQL filters plus BM25 plus vector similarity."
+"**Two — the semantic layer.** This is the core. We hand the model the official 311 taxonomy as context, and it does two things: it **maps** a plain-English question onto the official complaint types it semantically covers, and it **regroups** those official labels around the question instead of around which agency owns them. Retrieval is hybrid — SQL filters plus BM25 plus vector similarity."
 
 "**Three — the dashboard.** Which Shu will show you live."
 
-*(指 AI reliability 气泡)* "And you're all thinking the same thing: can you trust the model? Two answers. The tag vocabulary is **enforced at the schema level** — the model physically cannot emit a label that isn't in the controlled set. And every classification is a proposal the analyst can override, in one drag. Shu will show you that too."
+*(指 AI reliability 气泡)* "And you're all thinking the same thing: can you trust the model? Two answers. It never invents a category — the allowed labels are **enforced at the schema level**, so the output grammar only admits real 311 complaint types. It **regroups**; it does not generate. And every grouping is a proposal the analyst overrides in one drag. Shu will show you that too."
 
 **ZH**: 传统上，你必须先知道 311 的标签，才能用 311。我们把它反过来。三层：
 **一、数据管线**：从 Socrata 开放数据 API 增量拉取，进 Postgres + pgvector。
-**二、语义增强层**——这是核心。我们把 191 个大类和它们的 problem type 作为上下文，离线跑 LLM 批处理，给每条记录附上**多面向**标签：受控词表、天然跨部门。一条记录可以同时带垃圾、雨水口、积水三个面向。然后是混合检索：SQL 过滤 + BM25 + 向量相似度。
+**二、语义层**——这是核心。我们把 311 官方 taxonomy 作为上下文交给模型，它做两件事：把自然语言问题**映射**到它在语义上覆盖的官方 complaint type；再把这些官方标签按**问题意图重新聚合**，而不是按哪个部门负责。检索是混合式的：SQL 过滤 + BM25 + 向量相似度。
 **三、Dashboard**——Shu 会现场演示。
-（指 AI reliability 气泡）你们现在想的是同一件事：这个模型可信吗？两个回答。标签词表是**在 schema 层强制约束的**——模型物理上无法输出受控集合之外的标签。而且每一次分类都只是一个提议，分析师一次拖拽就能推翻它。这个 Shu 也会演示。
+（指 AI reliability 气泡）你们现在想的是同一件事：这个模型可信吗？两个回答。它**永远不会发明分类**——允许的标签在 schema 层被强制约束，输出语法只接受真实的 311 complaint type。它做的是**重组**，不是**生成**。而且每一次聚合都只是提议，分析师一次拖拽就能推翻。这个 Shu 也会演示。
 
 > 💡 **必须主动抛出 AI reliability，不要等被问。** Moussawi 自己建 RAG 系统，你先说，他会觉得你们想清楚了；他先问，你们就变成被审的一方。
 >
@@ -93,12 +93,12 @@
 
 ## Slide 5 · Workflow（Shu 接场，~30s）
 
-**EN**: "Thanks Archy. So here's the shape of it. The analyst types a question in plain English. The system decomposes it into semantic facets and lays them out as editable columns. The analyst corrects anything that's off — and downstream, that's a filtered dataset, a map, a trend, an export. Let me just show you."
+**EN**: "Thanks Archy. So here's the shape of it. The analyst asks in plain English. The system maps that question onto the official 311 complaint types, regroups them around the question, and lays them out as editable columns. The analyst corrects anything that's off — and downstream, that's a filtered dataset, a map, a trend, an export. Let me just show you."
 
-**ZH**: 谢谢 Archy。整个形态是这样：分析师用自然语言提问，系统把问题分解成语义面向、铺成可编辑的分栏，分析师修正不对的地方——往下游走，这就是一份过滤好的数据集、一张地图、一条趋势线、一次导出。我直接演示给你们看。
+**ZH**: 谢谢 Archy。整个形态是这样：分析师用自然语言提问，系统把问题映射到 311 官方分类、按问题意图重新聚合、铺成可编辑的分栏，分析师修正不对的地方——往下游走，这就是一份过滤好的数据集、一张地图、一条趋势线、一次导出。我直接演示给你们看。
 
 > 💡 别在这页停留，它只是通往 demo 的桥。**说完最后一句立刻切浏览器。**
-> ⚠️ 这页原本中间那栏叫 "Bottleneck"——bottleneck 是问题不是流程步骤。改成 `Input → Semantic Mapping + Human Review → Output`。
+> ⚠️ **这页要重画**（详见文末 UI/UX 清单第 1 条）：现在的 `Input → Bottleneck → Output` 三格必须换成五步流程，因为 bottleneck 是问题、不是流程步骤，而且现在的图没有体现「映射到官方分类」和「人工审核」这两步。
 
 ---
 
@@ -141,12 +141,57 @@
 
 ---
 
-## 改稿清单（演示前必做）
+## A. UI/UX 部分的修改清单（你问的重点）
 
-1. **删掉 Target 页。** 那是你们对 Moussawi 和 Nuñez 的 LinkedIn 调研截图——绝对不能出现在给他们本人看的 deck 里。**导出后再确认一遍。**
+### 1. Workflow 页要重画 —— 这是最重要的一处
+
+现在是 `Input → Bottleneck → Output` 三格。两个问题：**bottleneck 是问题不是流程步骤**；而且它没有体现你们真正的产品逻辑。换成这五步（横向流程图，每步一个方块）：
+
+```
+①  ASK                 ②  MAP                    ③  GROUP
+   Plain-English          → Official 311            → Auto-aggregate into
+   question                 complaint types            question-shaped columns
+   "what clogs catch        (schema-enforced;          (Debris Sources /
+    basins before            model cannot invent        Drainage & Sewer /
+    a storm?"                a label)                   Street Surface)
+
+                       ④  REVIEW              ⑤  VISUALIZE
+                          → Analyst drags        → Map · trend · export
+                            to correct
+                            (human in the loop)
+```
+
+**每格底下配一张对应的界面截图**：① Extractor 输入框特写；② 官方标签 chip 特写（放大一个 `ILLEGAL DUMPING` chip，让人看清这是真实的 311 标签）；③ 三个分栏的全景；④ 拖拽中的状态（半透明卡片跟随光标）；⑤ 地图 + 趋势图。
+
+> 💡 ②③ 两格是全 deck 最需要被看懂的地方。**② 的视觉重点是"标签是官方的"，③ 的视觉重点是"分栏是问题驱动的"。** 现在的 deck 完全没有把这个区别画出来。
+
+### 2. 给 ② 加一个"约束"的视觉隐喻
+
+Moussawi 会立刻想到 hallucination。与其用文字辩解，不如画出来：在 ② 那格里画一个**闭合的标签池**（191 个小方块的网格），几个被高亮选中，旁边一行小字 `enum-constrained · 0 invented labels`。这一张图省掉三十秒的解释。
+
+### 3. Dashboard 页的截图必须换新
+
+现在 deck 里的截图是旧版（A–E 五个固定桶、旧的 Try 快捷键 Odors/Hazards）。新版的分栏是**问题驱动的动态命名**（Debris Sources / Drainage & Sewer / …），这正是你们的卖点，旧截图反而在削弱它。**用新截图，并且截图里要能看到 EXCLUDED 栏**——它是"人工审核"这一步存在的视觉证据。
+
+### 4. 二维码旁边加一行小字
+
+线上版不跑模型，只保证三个样例问题。加一行：`Live demo: three sample questions · full semantic search runs locally`。这样扫码的人不会以为产品坏了，而且这句话本身就传达了"我们知道自己在做什么"。
+
+### 5. 术语在全 deck 内保持一致
+
+现在混用了 category / label / tag / complaint type。**统一成两个词**：
+- **complaint type**（官方的、311 给的、模型只能选不能造）
+- **column**（问题驱动的、模型生成的、分析师可编辑的）
+
+「tag」这个词从 deck 里全部删掉——它会让人以为你们在原数据上加了新字段，从而引出"那你们的标注质量怎么保证"这个你不想在 8 分钟里回答的问题。
+
+---
+
+## B. 内容/事实修改清单（演示前必做）
+
+1. **删掉 Target 页。** 那是你们对 Moussawi 和 Nuñez 的 LinkedIn 调研截图——绝对不能出现在给他们本人看的 deck 里。**导出 PDF 后再确认一遍。**
 2. **统一日期。** 多数页角标还是 "Apr 26, 2026"（黑客松日期），标题页是 July 9。全改成 July 9 或直接删掉。
 3. **技术栈自相矛盾。** 架构图写 Postgres + pgvector + BM25，Methodology 页写 Elasticsearch。**选 pgvector**（Slide 4 备注里有理由），把 Elasticsearch 那个方块改掉。
 4. **中文内容全部翻译。** 架构图标注和 Instacart vs NYC 311 对比表现在是中文，听众看不懂。那张对比表其实很出彩（append-only、QPS<1、秒级延迟可接受 → 所以不需要重型搜索基建），建议保留并翻译，它是你们工程判断力的最佳展示。
-5. **Workflow 页中间栏改名**：`Bottleneck` → `Semantic Mapping + Human Review`。
-6. **数字更新**：demo 数据现在是 **3,600 条 / 最近三个月**，不是旧版的 3,000 条全年。Dashboard 截图若出现在 slide 上，请换成新截图。
-7. **单位写清楚**："766K, 460M" → "766K rows / 460 MB"。
+5. **数字更新**：demo 数据现在是 **3,600 条 / 最近三个月（2025-10~12）**，不是旧版的 3,000 条全年。
+6. **单位写清楚**："766K, 460M" → "766K rows / 460 MB"。
