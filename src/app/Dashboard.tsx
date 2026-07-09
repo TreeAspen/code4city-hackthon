@@ -138,7 +138,12 @@ export default function Dashboard() {
     () => curatedCategoriesFor(DEFAULT_QUERY) ?? buildCategoriesForQuery(DEFAULT_QUERY),
   );
   const [isProcessingAI, setIsProcessingAI] = useState(false);
-  const [activeQuery, setActiveQuery] = useState(DEFAULT_QUERY);
+  // draftQuery = what's in the input box (a Try chip only edits this).
+  // appliedQuery = the question the board on screen actually answers.
+  // Keeping them apart stops the header from claiming a question whose
+  // columns haven't been computed yet.
+  const [draftQuery, setDraftQuery] = useState(DEFAULT_QUERY);
+  const [appliedQuery, setAppliedQuery] = useState(DEFAULT_QUERY);
 
   // Query → official 311 complaint types, grouped into task-specific columns.
   // Resolution order:
@@ -147,7 +152,7 @@ export default function Dashboard() {
   //   3. keyword mapping          — deterministic fallback, never fails
   const handleAIQuery = async (query: string) => {
     setIsProcessingAI(true);
-    setActiveQuery(query);
+    setDraftQuery(query);
     try {
       const curated = curatedCategoriesFor(query);
       if (curated) {
@@ -159,9 +164,11 @@ export default function Dashboard() {
         await new Promise(r => setTimeout(r, 600));
         setCategories(buildCategoriesForQuery(query));
       }
+      setAppliedQuery(query);
     } catch (err) {
       console.error('[LLM mapper] falling back to keyword mapping:', err);
       setCategories(buildCategoriesForQuery(query));
+      setAppliedQuery(query);
     } finally {
       setIsProcessingAI(false);
     }
@@ -267,7 +274,7 @@ export default function Dashboard() {
   return (
     <DndProvider backend={HTML5Backend}>
       <DashboardLayout
-        sidebar={<SidebarFilters filters={filters} setFilters={setFilters} onSelectHistory={handleAIQuery} activeQuery={activeQuery} />}
+        sidebar={<SidebarFilters filters={filters} setFilters={setFilters} onSelectHistory={handleAIQuery} activeQuery={appliedQuery} />}
         rightSidebar={<AnalyticsSidebar data={filteredData} />}
         content={
           <div className="flex flex-col h-full">
@@ -282,16 +289,16 @@ export default function Dashboard() {
               <AIQueryBuilder
                 onSearch={handleAIQuery}
                 isProcessing={isProcessingAI}
-                value={activeQuery}
-                onChange={setActiveQuery}
+                value={draftQuery}
+                onChange={setDraftQuery}
               />
             </div>
 
             <div className="flex-1 overflow-auto p-6 flex flex-col space-y-4 min-h-0">
-              {activeQuery && (
+              {appliedQuery && (
                 <div className="flex-1 min-h-[400px] overflow-hidden bg-white flex flex-col border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)]">
                   <div className="px-4 py-3 border-b-2 border-black bg-white flex justify-between items-center">
-                    <h3 className="font-bold text-black uppercase tracking-tight text-sm">Semantic Classification for: "{activeQuery}"</h3>
+                    <h3 className="font-bold text-black uppercase tracking-tight text-sm">Semantic Classification for: "{appliedQuery}"</h3>
                     <p className="text-xs font-bold text-black uppercase tracking-tight">Drag to reassign, or use 'Add Item' to move existing subcategories.</p>
                   </div>
                   <CategoryBoard

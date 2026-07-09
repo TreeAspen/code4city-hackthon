@@ -91,10 +91,12 @@ export const AIQueryBuilder = ({ onSearch, isProcessing, value, onChange }: AIQu
         </form>
         <div className="mt-2 flex space-x-2 text-[10px] text-black items-center">
           <span className="font-bold uppercase tracking-tight">Try:</span>
+          {/* Chips only load the question into the box — the presenter
+              decides when to run it by pressing Extract. */}
           {CURATED_QUERIES.map(({ query: q, chip }) => (
             <button
               key={chip}
-              onClick={() => { setQuery(q); onSearch(q); }}
+              onClick={() => setQuery(q)}
               className="font-medium hover:bg-black hover:text-[#FFE300] px-1 py-0.5 rounded transition-colors"
             >
               {chip}
