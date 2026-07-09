@@ -1,61 +1,64 @@
-# Methodology 页 — 声称 vs 实际（给 Archy）
+# 两套系统的对齐 — 演示前必须解决
 
-> 核实日期 2026-07-09，基于仓库 `main` 分支的实际代码。
-> **动机**：听众 Dr. Moussawi 每天建这类系统。任何一个"我们用了 X"而 X 不存在的地方，一问就穿帮，且会连带清空其余部分的可信度。
+> 更新 2026-07-09,在看到 Archy 的完整 deck(`rechannel-chief-ds-demo`)之后重写。
+> **早先版本的结论作废**:那份文档断言"仓库里没有 FAISS、没有 embedding、没有 Postgres",这对**本仓库**成立,但 Archy 在**另一个仓库**里真的建了这些。0.9567 是正当数字。
 
-## 对照表
+## 一、0.9567 是什么(已澄清)
 
-| Slide 上写的 | 代码里实际是什么 | 判断 |
+Archy 的检索链路是 Postgres(source of truth)→ Elasticsearch(BM25 + 向量,混合检索)。
+
+- **标准答案**:FAISS 暴力精确搜索的 top-10 —— 慢,但绝对正确。
+- **被测对象**:线上那条又快又近似的混合检索。
+- **recall@10 = 0.9567**:线上路径捞回了精确答案 10 个里的 9.567 个。
+
+`0.70 → 0.9567` **不是调参**。第一次测出 0.70,根因是头部 pattern(6 万条相同记录)淹没候选列表——一个结构性 bug;改成 pattern-level 检索后升到 0.9567。
+
+**这是整个 deck 最有分量的一点**:一个只有评测装置才能发现的 bug。对一位亲手建 RAG 的听众,这比 0.9567 本身重要得多。
+
+### 但这页仍有一个洞
+
+标题写 `Accuracy`,副标题说 `Precision scored against a human-labeled golden set — 30 queries`,**却没有给出 precision 的数字**。0.9567 是 recall@10,既不是 precision 也不是 accuracy。要么补上数字,要么删掉那句话——别留悬念。
+
+## 二、两套系统并不相连
+
+| | Archy 的系统 | Shu 的 dashboard(本仓库) |
 |---|---|---|
-| `766K raw data → Build search index` | 无索引。`scripts/preprocess.js` 流式解析 450MB CSV，按月分层抽样 1,200×3 = 3,600 条 → 静态 JSON | ❌ 改 |
-| 技术栈 `Python + PostgreSQL` | 无 Python，无数据库。Node 脚本 + 打进 bundle 的静态 JSON | ❌ 改 |
-| `Identify different patterns: 766K → 337` | 未做。受控词表是 `src/app/buckets.ts` 里的 **45 个官方 complaint type**。**337 来源不明** | ❌ 删或解释 |
-| `Enrichment: Text → Vector (Embedding)` | 无 embedding、无向量、无相似度检索 | ❌ 删 |
-| 技术栈 `embeddings (bge, vector)` | 仓库内无任何 embedding 代码或依赖 | ❌ 删 |
-| `E.g: Blocked drain = clogged sewer` | 语义等价关系成立，但由 LLM 在 prompt 中判断，非向量相似度 | ⚠️ 改措辞 |
-| 技术栈 `Elasticsearch` | 不存在。且与架构图的 pgvector 自相矛盾 | ❌ 删 |
-| 技术栈 `FastAPI` | 不存在。无后端，纯静态 SPA | ❌ 删 |
-| `LLM API` | ✅ 本地 Ollama（llama3.1:8b），零 API 成本 | ✅ 改措辞 |
-| `HITL` | ✅ 拖拽校正真实可用 | ✅ 保留 |
-| `Natural Language → Structured Query` | ✅ 问题 → 官方 complaint type 集合 | ✅ 保留 |
-| `Organize Dictionary` | ✅ 即问题驱动的分栏 | ✅ 保留 |
-| `Heatmap & Barplot` | ✅ 地图 + 月度趋势 | ✅ 保留 |
-| 技术栈 `React` | ✅ Vite + React SPA | ✅ 保留 |
+| 数据 | 766K 条 · 7 部门 · 全年 | 3,600 条 · 环卫子集 · 2025-10~12 |
+| 分类 | 191 大类 / 951 子类 → 337 patterns | 45 个官方 complaint type |
+| 存储 | Postgres + Elasticsearch(docker compose) | 静态 JSON,打进前端 bundle |
+| 检索 | BM25 + 向量混合,recall@10 = 0.9567 | 浏览器内存过滤 |
+| serving 路径的 AI | 无(确定性规则,0.054 ms) | 本地 LLM(**线上版无**) |
+| 评测 | FAISS ground truth + golden set | 无 |
 
-**额外注意**：离线打的 3,559 条语义标签（`tagRecords.mjs` 产物）在 2026-07-09 的重构后**已不被 UI 使用**。若 "LLM Enrichment (offline)" 指的是它，则当前 serving 路径中它贡献为零。
+**没有任何一行代码相连。** 若 Archy 讲完 766K 和 0.9567,Shu 切到浏览器演示 3,600 条静态数据,听众会以为是同一个系统的界面。一旦有人数记录数、或问"这就是刚才那个 ES 里的数据吗",很难收场。
 
-## 真实工作流
+## 三、三处必须今晚对齐的矛盾
 
-```
-① 抽样   450MB CSV (766K 行) --流式解析--> 分层抽样 1,200/月 × 3 月 = 3,600 条静态 JSON
-② 词表   45 个官方 311 complaint type，人工归入 5 个语义桶 (buckets.ts)
-③ 提问   分析师自然语言提问
-④ 映射   本地 LLM (llama3.1:8b) 将问题映射到官方 complaint type
-          ↑ response schema 的 enum 锁死输出，模型无法发明标签
-⑤ 聚合   同一次调用按问题意图把选中标签重组为分栏
-⑥ 审核   分析师拖拽校正 (HITL)
-⑦ 呈现   浏览器内存过滤 → 地图 · 月度趋势 · 导出
-```
+1. **`481 ms`(slide 3)vs `181 ms` p95(slide 9)**。p95 不可能低于典型值,口径要统一。
+2. **Slide 10 "Five question shapes, live today"** —— district ranking、trend sparklines(+267%)、lift-ranked associations(1.33×)、explain panel:**Shu 的 dashboard 一个都没有**。若台上演示的是 Shu 的界面,第一个追问就是"能跑一下第 5 个吗"。
+3. **Slide 8 "the answering path contains no generative AI at all"** vs Shu 本地 dev server 每次 Extract 都调 llama3.1:8b。
+   ✅ **好消息**:GitHub Pages 上的部署版恰好完全符合该描述——三个策展问题 + 关键词回退,零模型调用。**明天用线上版即可自洽。**
 
-无数据库、无索引、无向量、无后端。**这是一个诚实的 pilot 应有的样子。**
+## 四、建议的叙事(方案 A)
 
-## 建议改法：每格拆成 Pilot / At scale 两行
+把"两套系统"讲成"两个层":
 
-| | Data Pipeline | Semantic Layer | Dashboard |
-|---|---|---|---|
-| **流程** | 766K rows (460 MB) ↓ stratified sample ↓ 3,600 rows (3 months) | 45 official complaint types as vocabulary ↓ LLM maps question → official types, regroups by intent ↓ human-in-the-loop | Ask in plain English ↓ map → group ↓ analyst corrects ↓ Map · Trend · Export |
-| **Pilot（今天跑的）** | Node + static JSON | local open-source LLM, $0 API cost | React SPA, in-memory |
-| **At scale（架构目标）** | Postgres + pgvector | + embeddings for recall | FastAPI |
+> **Archy**: "…and that's the retrieval layer: 766K records, hybrid search, recall 0.9567 against exact ground truth."
+>
+> **Shu**: "Archy's backend answers the question. What I'll show you is how an analyst *works* with that answer. This front-end runs on a 3,600-record slice so it ships as a static page you can open on your phone right now — but every interaction you see is designed against his API."
 
-### 三处具体措辞
+若时间不够对齐,退到方案 B,直说:
 
-1. 删 `766K → 337` → 换成 `766K rows → 3,600-row pilot sample (1,200/month × 3 months)`。除非能当场解释 337。
-2. 删 `Enrichment: Text → Vector (Embedding)` 和 `bge` → 换成 `Question → official complaint types (schema-enforced enum)`。例子改写为 `"Blocked drain" → Sewer, Standing Water, Root/Sewer/Sidewalk Condition`，并注明是模型的语义判断。
-3. 删 `Elasticsearch`，与架构图统一到 pgvector，且标注为 `at scale`。
+> "We built two halves in parallel: Archy took the retrieval engine, I took the interaction layer. They're not wired together yet — that's the first thing we'd do with a real engagement."
 
-## 会被问到什么，怎么答
+**这句话说出来一点都不丢人。丢人的是被发现你们假装它们是一个系统。**
 
-- **"索引怎么建的？"** → Pilot 没有索引，3,600 条在浏览器里过滤就够了。到 766K 规模，Postgres 的 tsvector + pgvector HNSW 是我们的选择——因为写入是 append-only、QPS < 1、秒级延迟可接受，不需要再运维一套 Elasticsearch。
-- **"embedding 用什么模型？"** → Pilot 阶段没有用 embedding。问题到官方标签的映射由 LLM 在受控词表上完成，enum 约束保证零幻觉。Embedding 是我们下一步提升召回的方向，尤其是词表扩展到 191 个大类之后。
-- **"为什么不用 embedding？"** → 45 个标签的词表可以整个放进 prompt。到 951 个子类时就必须先做向量召回再交给 LLM 重排——那是架构图右半边的事。
-- **"这跑在哪？"** → 我的笔记本。开源模型，零 API 成本，离线可跑。这也是为什么它可以部署在市政内网里，数据不出门。
+## 五、今晚发给 Archy 的清单
+
+1. Precision 那 30 条 golden set 的数字是多少?没有就删掉那句话。
+2. 481 ms 和 181 ms p95,哪个是哪个?
+3. Slide 10 的五种问法,你的界面能现场跑吗?还是明天用我的 dashboard?
+4. 若用我的 dashboard:它跑在 3,600 条静态数据上,和你的 Postgres/ES 无连接。怎么跟听众讲?我倾向"你做检索引擎、我做交互层,尚未接通"。
+5. Slide 8 说 serving path 无 generative AI —— 我本地版点 Extract 会调本地 LLM。我明天用**线上版**(纯确定性、零模型调用),与你的 slide 一致。可以吗?
+
+**第 4、5 条必须在上台前有答案。**
