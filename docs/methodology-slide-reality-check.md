@@ -19,7 +19,43 @@ Archy 的检索链路是 Postgres(source of truth)→ Elasticsearch(BM25 + 向�
 
 标题写 `Accuracy`,副标题说 `Precision scored against a human-labeled golden set — 30 queries`,**却没有给出 precision 的数字**。0.9567 是 recall@10,既不是 precision 也不是 accuracy。要么补上数字,要么删掉那句话——别留悬念。
 
-## 二、两套系统并不相连
+## 二、分工是有意的 —— 但接缝要说出来
+
+Archy 做后端检索工作流,Shu 做前端交互页面。**这是有意的分工,不是问题。**
+问题在于:**听众不知道**。不明说的话,他们默认看到的是同一个系统的两个部分,然后自己发现 766K vs 3,600、以及 "serving path 无生成式 AI" vs Extractor 调模型的落差。
+
+### 开场一句话买断所有困惑
+
+> "We split the work: Archy built the retrieval engine, I built the interaction layer. They're separate prototypes today — you'll see both, and we'll tell you where the seam is."
+
+### 演示时点明数据规模
+
+> "This front-end runs on a 3,600-record slice — three months of the sanitation set — so it ships as a static page you can open on your phone. Archy's engine indexes all 766K."
+
+### "No generative AI in the answering path" 是最好的一张牌,不是矛盾
+
+两个原型在**同一个设计问题上做了不同选择**:
+
+| | 意图解析(C5) | 代价 |
+|---|---|---|
+| Archy | 确定性规则,0.054 ms | 快、可审计、可复现;新问法要写新规则 |
+| Shu | 本地小模型映射到官方分类(schema enum 约束) | 灵活、零规则维护;引入需约束+人工审核的模型 |
+
+主动把它作为公开的设计问题抛出:
+
+> "Archy's serving path is deterministic — no model, 0.054 milliseconds, fully auditable. Mine puts a small local model at the intent-parsing step, constrained so it can only pick from official complaint types. Both are defensible. Which one belongs in a government system is exactly the kind of question we'd want your team's opinion on."
+
+**这可能是全场最好的一句话** —— 它把 Q&A 变成协作。前提是**你主动说**,而不是等他发现。
+
+### Slide 10 归 Archy
+
+`district ranking` / `trend sparklines (+267%)` / `lift-ranked associations (1.33×)` / `explain panel` —— Shu 的界面没有这些。**那页由 Archy 讲、用 Archy 的系统演示**,且不要与 Shu 的 dashboard 截图相邻。
+
+### 明天用哪个版本?
+
+两个都合规(因为分工已明说)。**建议本地版**,正为了演示上面那个设计权衡:一个真实跑着的、受 schema 约束的本地模型,当场把自然语言映射到官方分类,再被人工拖拽校正——活的论据。**线上版作备份**(二维码也指向它),模型失败时代码静默回退到确定性映射,顺势讲"deterministic fallback 也是设计的一部分"。
+
+## 三、两套系统的技术对照(供你自己心里有数)
 
 | | Archy 的系统 | Shu 的 dashboard(本仓库) |
 |---|---|---|
@@ -30,35 +66,12 @@ Archy 的检索链路是 Postgres(source of truth)→ Elasticsearch(BM25 + 向�
 | serving 路径的 AI | 无(确定性规则,0.054 ms) | 本地 LLM(**线上版无**) |
 | 评测 | FAISS ground truth + golden set | 无 |
 
-**没有任何一行代码相连。** 若 Archy 讲完 766K 和 0.9567,Shu 切到浏览器演示 3,600 条静态数据,听众会以为是同一个系统的界面。一旦有人数记录数、或问"这就是刚才那个 ES 里的数据吗",很难收场。
+两边没有代码相连——这是分工的必然结果,不是缺陷。**只要在开场说出来就没问题。**
 
-## 三、三处必须今晚对齐的矛盾
+## 四、今晚发给 Archy 的清单
 
-1. **`481 ms`(slide 3)vs `181 ms` p95(slide 9)**。p95 不可能低于典型值,口径要统一。
-2. **Slide 10 "Five question shapes, live today"** —— district ranking、trend sparklines(+267%)、lift-ranked associations(1.33×)、explain panel:**Shu 的 dashboard 一个都没有**。若台上演示的是 Shu 的界面,第一个追问就是"能跑一下第 5 个吗"。
-3. **Slide 8 "the answering path contains no generative AI at all"** vs Shu 本地 dev server 每次 Extract 都调 llama3.1:8b。
-   ✅ **好消息**:GitHub Pages 上的部署版恰好完全符合该描述——三个策展问题 + 关键词回退,零模型调用。**明天用线上版即可自洽。**
-
-## 四、建议的叙事(方案 A)
-
-把"两套系统"讲成"两个层":
-
-> **Archy**: "…and that's the retrieval layer: 766K records, hybrid search, recall 0.9567 against exact ground truth."
->
-> **Shu**: "Archy's backend answers the question. What I'll show you is how an analyst *works* with that answer. This front-end runs on a 3,600-record slice so it ships as a static page you can open on your phone right now — but every interaction you see is designed against his API."
-
-若时间不够对齐,退到方案 B,直说:
-
-> "We built two halves in parallel: Archy took the retrieval engine, I took the interaction layer. They're not wired together yet — that's the first thing we'd do with a real engagement."
-
-**这句话说出来一点都不丢人。丢人的是被发现你们假装它们是一个系统。**
-
-## 五、今晚发给 Archy 的清单
-
-1. Precision 那 30 条 golden set 的数字是多少?没有就删掉那句话。
-2. 481 ms 和 181 ms p95,哪个是哪个?
-3. Slide 10 的五种问法,你的界面能现场跑吗?还是明天用我的 dashboard?
-4. 若用我的 dashboard:它跑在 3,600 条静态数据上,和你的 Postgres/ES 无连接。怎么跟听众讲?我倾向"你做检索引擎、我做交互层,尚未接通"。
-5. Slide 8 说 serving path 无 generative AI —— 我本地版点 Extract 会调本地 LLM。我明天用**线上版**(纯确定性、零模型调用),与你的 slide 一致。可以吗?
-
-**第 4、5 条必须在上台前有答案。**
+1. Precision 那 30 条 golden set 的数字是多少?没有就把 "Precision scored against…" 那句删掉,别留悬念。
+2. `481 ms`(slide 3)和 `181 ms` p95(slide 9),哪个是哪个?p95 不可能低于典型值。
+3. Slide 10 的五种问法由你的系统演示,对吗?我的 dashboard 没有 explain panel / sparklines / lift 关联,别把它的截图放在那页附近。
+4. 开场我们明说分工("你做检索引擎、我做交互层,今天是两个独立原型")——同意吗?
+5. 我打算演示本地版(真跑受约束的本地模型),正好和你 slide 8 的确定性 serving path 形成一个**公开的设计权衡**,主动抛给他们讨论。你觉得呢?线上版作备份。
